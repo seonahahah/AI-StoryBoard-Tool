@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Clapperboard, 
   Plus, 
@@ -10,6 +10,8 @@ import {
   Trash2, 
   Copy, 
   ChevronRight,
+  ChevronDown,
+  Download,
   Loader2,
   CheckCircle2,
   AlertCircle,
@@ -132,9 +134,14 @@ export default function App() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const [showSaveMenu, setShowSaveMenu] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadInputRef = useRef<HTMLInputElement>(null);
   const pdfExportRef = useRef<HTMLDivElement>(null);
+
+  const AUTOSAVE_KEY = 'ai_storyboard_autosave';
 
   // --- Helpers ---
   const parseDuration = (durationStr: string): number => {
@@ -152,6 +159,45 @@ export default function App() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  // --- Auto-save & Restore ---
+  useEffect(() => {
+    const saved = localStorage.getItem(AUTOSAVE_KEY);
+    if (saved) {
+      try {
+        const d = JSON.parse(saved);
+        setProjectTitle(d.projectTitle || '');
+        setScenarioText(d.scenarioText || '');
+        setAspectRatio(d.aspectRatio || '16:9');
+        setShotList(d.shotList || []);
+        setStoryboardPrompts(d.storyboardPrompts || {});
+        setFinalImages(d.finalImages || {});
+        setCurrentStep(d.currentStep || 1);
+        showToast('이전 작업을 불러왔습니다 ✓');
+      } catch (e) {
+        console.error('Failed to restore autosave', e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const data = {
+        projectTitle,
+        scenarioText,
+        aspectRatio,
+        shotList,
+        storyboardPrompts,
+        finalImages,
+        currentStep
+      };
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
+      const now = new Date();
+      setLastSavedTime(`${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [projectTitle, scenarioText, aspectRatio, shotList, storyboardPrompts, finalImages, currentStep]);
 
   const totalSeconds = shotList.reduce((acc, shot) => acc + parseDuration(shot.duration), 0);
   const avgSeconds = shotList.length > 0 ? (totalSeconds / shotList.length).toFixed(1) : 0;
@@ -329,7 +375,27 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
         setStoryboardPrompts({});
         setFinalImages({});
         setCurrentStep(1);
+        localStorage.removeItem(AUTOSAVE_KEY);
+        setLastSavedTime(null);
         setShowConfirm(null);
+      }
+    });
+  };
+
+  const resetAutosave = () => {
+    setShowConfirm({
+      message: '자동저장 데이터를 초기화하고 새 프로젝트를 시작하시겠습니까?',
+      onConfirm: () => {
+        setProjectTitle('');
+        setScenarioText('');
+        setShotList([]);
+        setStoryboardPrompts({});
+        setFinalImages({});
+        setCurrentStep(1);
+        localStorage.removeItem(AUTOSAVE_KEY);
+        setLastSavedTime(null);
+        setShowConfirm(null);
+        setShowSaveMenu(false);
       }
     });
   };
@@ -370,6 +436,7 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
         setStoryboardPrompts(d.storyboardPrompts || {});
         setFinalImages(d.finalImages || {});
         if (loadedShots.length) setCurrentStep(2);
+        showToast('프로젝트를 불러왔습니다 ✓');
       } catch {
         setError('프로젝트 파일을 읽을 수 없습니다.');
       }
@@ -597,9 +664,14 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
               <div className="w-10 h-10 bg-gradient-to-br from-violet-600 to-pink-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20">
                 <Clapperboard className="text-white" size={24} />
               </div>
-              <h1 className="text-xl font-extrabold bg-gradient-to-r from-violet-400 to-pink-400 bg-clip-text text-transparent">
-                AI Storyboard Generator
-              </h1>
+              <div>
+                <h1 className="text-xl font-extrabold bg-gradient-to-r from-violet-400 to-pink-400 bg-clip-text text-transparent">
+                  AI Storyboard Generator
+                </h1>
+                {lastSavedTime && (
+                  <p className="text-[10px] text-slate-500 font-medium">자동 저장됨 {lastSavedTime}</p>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button 
@@ -608,12 +680,35 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
               >
                 <Plus size={16} /> 새 프로젝트
               </button>
-              <button 
-                onClick={saveProject}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-sm font-medium text-slate-300"
-              >
-                <Save size={16} /> 저장
-              </button>
+              <div className="relative">
+                <button 
+                  onClick={() => setShowSaveMenu(!showSaveMenu)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-sm font-medium text-slate-300"
+                >
+                  <Save size={16} /> 저장 <ChevronDown size={14} className={`transition-transform ${showSaveMenu ? 'rotate-180' : ''}`} />
+                </button>
+                {showSaveMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowSaveMenu(false)} />
+                    <div className="absolute right-0 mt-2 w-56 bg-[#1a1625] border border-white/10 rounded-xl shadow-2xl z-20 overflow-hidden py-1">
+                      <button 
+                        onClick={() => { saveProject(); setShowSaveMenu(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors text-left"
+                      >
+                        <Download size={16} className="text-violet-400" />
+                        <span>💾 파일로 저장</span>
+                      </button>
+                      <button 
+                        onClick={resetAutosave}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors text-left"
+                      >
+                        <Trash2 size={16} />
+                        <span>🔄 자동저장 데이터 초기화</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
               <button 
                 onClick={() => loadInputRef.current?.click()}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-sm font-medium text-slate-300"
