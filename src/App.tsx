@@ -398,20 +398,8 @@ cameraAngle 옵션: High Angle, Eye-level, Low Angle, Bird's-eye view, Over the 
     }
   };
 
-  const handleCreateStoryboard = async () => {
-    setIsGenerating(true);
-    setGenerationProgress(0);
-    setError(null);
-    setCurrentStep(3);
-
-    const newPrompts: Record<string, PromptData> = {};
-
-    for (let i = 0; i < shotList.length; i++) {
-      const shot = shotList[i];
-      const key = `${shot.scene}-${shot.shot}`;
-
-      try {
-        const promptText = `당신은 AI 이미지 생성 전문가입니다.
+  const generatePromptForShot = async (shot: Shot): Promise<PromptData> => {
+    const promptText = `당신은 AI 이미지 생성 전문가입니다.
 아래 영화 샷 정보를 기반으로 Midjourney/DALL-E용 이미지 프롬프트를 생성하세요.
 
 프로젝트: ${projectTitle || 'Untitled'}
@@ -426,46 +414,81 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
 아래 JSON만 출력하세요 (마크다운 없이):
 {"prompt":"상세한 영문 이미지 생성 프롬프트 (120-160단어, 샷 타입/앵글/조명/분위기/색감/스타일 포함)","negativePrompt":"피해야 할 요소들"}${shot.referenceImage ? "\n\n첨부된 레퍼런스 이미지의 스타일, 색감, 분위기, 구도를 참고하여 이미지 생성 프롬프트를 작성해줘. 레퍼런스 이미지와 유사한 톤과 무드를 반영할 것." : ""}`;
 
-        const parts: any[] = [{ text: promptText }];
-        
-        if (shot.referenceImage) {
-          const base64Data = shot.referenceImage.split(',')[1];
-          const mimeType = shot.referenceImage.split(';')[0].split(':')[1] || 'image/jpeg';
-          parts.push({
-            inlineData: {
-              mimeType: mimeType,
-              data: base64Data
-            }
-          });
+    const parts: any[] = [{ text: promptText }];
+    
+    if (shot.referenceImage) {
+      const base64Data = shot.referenceImage.split(',')[1];
+      const mimeType = shot.referenceImage.split(';')[0].split(':')[1] || 'image/jpeg';
+      parts.push({
+        inlineData: {
+          mimeType: mimeType,
+          data: base64Data
         }
+      });
+    }
 
-        const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: { parts },
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                prompt: { type: Type.STRING },
-                negativePrompt: { type: Type.STRING }
-              },
-              required: ["prompt", "negativePrompt"]
-            }
-          }
-        });
-
-        newPrompts[key] = JSON.parse(response.text);
-      } catch (err) {
-        console.error(err);
-        newPrompts[key] = { prompt: shot.description, negativePrompt: '' };
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: { parts },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            prompt: { type: Type.STRING },
+            negativePrompt: { type: Type.STRING }
+          },
+          required: ["prompt", "negativePrompt"]
+        }
       }
+    });
 
+    return JSON.parse(response.text);
+  };
+
+  const handleGenerateSinglePrompt = async (shot: Shot) => {
+    const key = `${shot.scene}-${shot.shot}`;
+    setIsGenerating(true);
+    setGenerationProgress(0);
+    setError(null);
+
+    try {
+      const result = await generatePromptForShot(shot);
+      setStoryboardPrompts(prev => ({ ...prev, [key]: result }));
+      showToast(`Scene ${shot.scene} Shot ${shot.shot} 프롬프트 생성 완료!`);
+    } catch (err) {
+      console.error(err);
+      showToast('프롬프트 생성 중 오류가 발생했습니다.', 'error');
+    } finally {
+      setIsGenerating(false);
+      setGenerationProgress(0);
+    }
+  };
+
+  const handleCreateStoryboard = async () => {
+    setIsGenerating(true);
+    setGenerationProgress(0);
+    setError(null);
+    setCurrentStep(3);
+
+    const newPrompts: Record<string, PromptData> = { ...storyboardPrompts };
+
+    for (let i = 0; i < shotList.length; i++) {
+      const shot = shotList[i];
+      const key = `${shot.scene}-${shot.shot}`;
+
+      try {
+        const result = await generatePromptForShot(shot);
+        newPrompts[key] = result;
+        setStoryboardPrompts({ ...newPrompts });
+      } catch (err) {
+        console.error(`Error generating prompt for shot ${key}:`, err);
+      }
       setGenerationProgress(Math.round(((i + 1) / shotList.length) * 100));
-      setStoryboardPrompts(prev => ({ ...prev, ...newPrompts }));
     }
 
     setIsGenerating(false);
+    showToast('스토리보드 프롬프트 생성이 완료되었습니다!');
   };
 
   // --- Actions ---
@@ -1273,6 +1296,14 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                           <td className="p-4 align-top">
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button 
+                                onClick={() => handleGenerateSinglePrompt(shot)}
+                                disabled={isGenerating}
+                                className="p-2 rounded-lg hover:bg-violet-500/10 text-slate-400 hover:text-violet-400 transition-colors disabled:opacity-50"
+                                title="프롬프트 생성/재생성"
+                              >
+                                <RefreshCw size={16} className={isGenerating ? 'animate-spin' : ''} />
+                              </button>
+                              <button 
                                 onClick={() => duplicateShot(idx)}
                                 className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
                                 title="복제"
@@ -1390,6 +1421,14 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
                             Scene {shot.scene} · Shot {shot.shot}
                           </span>
+                          <button 
+                            onClick={() => handleGenerateSinglePrompt(shot)}
+                            disabled={isGenerating}
+                            className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-violet-400 hover:bg-violet-500/10 transition-all disabled:opacity-50"
+                            title="프롬프트 재생성"
+                          >
+                            <RefreshCw size={12} className={isGenerating ? 'animate-spin' : ''} />
+                          </button>
                         </div>
                         
                         <div>
