@@ -119,31 +119,42 @@ export default function App() {
     setLocalProjects(getLocalProjects());
   }, []);
 
-  const saveLocalProject = () => {
-    const projects = getLocalProjects();
-    if (projects.length >= 10) {
-      // Delete oldest
-      const oldest = projects[projects.length - 1];
-      localStorage.removeItem(oldest.key);
-    }
+  const saveLocalProject = (overrideData?: any) => {
+    try {
+      const projects = getLocalProjects();
+      if (projects.length >= 10) {
+        // Delete oldest
+        const oldest = projects[projects.length - 1];
+        localStorage.removeItem(oldest.key);
+      }
 
-    const id = 'sb_project_' + Date.now();
-    const data = {
-      id,
-      title: projectTitle || 'Untitled Project',
-      savedAt: Date.now(),
-      projectTitle,
-      scenarioText,
-      aspectRatio,
-      shotList,
-      storyboardPrompts,
-      finalImages,
-      currentStep
-    };
-    localStorage.setItem(id, JSON.stringify(data));
-    setLocalProjects(getLocalProjects());
-    showToast('로컬에 저장되었습니다 ✓');
-    setShowSaveMenu(false);
+      const id = 'sb_project_' + Date.now();
+      const data = {
+        id,
+        title: (overrideData?.projectTitle || projectTitle) || 'Untitled Project',
+        savedAt: Date.now(),
+        projectTitle: overrideData?.projectTitle ?? projectTitle,
+        scenarioText: overrideData?.scenarioText ?? scenarioText,
+        aspectRatio: overrideData?.aspectRatio ?? aspectRatio,
+        shotList: overrideData?.shotList ?? shotList,
+        storyboardPrompts: overrideData?.storyboardPrompts ?? storyboardPrompts,
+        finalImages: overrideData?.finalImages ?? finalImages,
+        currentStep: overrideData?.currentStep ?? currentStep
+      };
+      
+      localStorage.setItem(id, JSON.stringify(data));
+      
+      // Debug log
+      const saved = localStorage.getItem(id);
+      console.log('Project saved to local storage:', JSON.parse(saved || '{}'));
+
+      setLocalProjects(getLocalProjects());
+      showToast('로컬에 저장되었습니다 ✓');
+      setShowSaveMenu(false);
+    } catch (e) {
+      console.error('Failed to save local project', e);
+      showToast('저장 실패: localStorage 용량을 초과했을 수 있습니다', 'error');
+    }
   };
 
   const loadLocalProject = (key: string) => {
@@ -403,7 +414,16 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
         setShotList(loadedShots);
         setStoryboardPrompts(d.storyboardPrompts || {});
         setFinalImages(d.finalImages || {});
-        if (loadedShots.length) setCurrentStep(2);
+        const nextStep = loadedShots.length ? 2 : 1;
+        setCurrentStep(nextStep);
+        
+        // Save to local storage immediately with the loaded data
+        saveLocalProject({
+          ...d,
+          shotList: loadedShots,
+          currentStep: nextStep
+        });
+
         showToast('프로젝트를 불러왔습니다 ✓');
         e.target.value = ''; // Reset input
       } catch {
@@ -662,7 +682,17 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                         <span>💾 파일로 저장</span>
                       </button>
                       <button 
-                        onClick={saveLocalProject}
+                        onClick={() => {
+                          saveLocalProject({
+                            projectTitle,
+                            scenarioText,
+                            aspectRatio,
+                            shotList,
+                            storyboardPrompts,
+                            finalImages,
+                            currentStep
+                          });
+                        }}
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors text-left"
                       >
                         <Activity size={16} className="text-emerald-400" />
