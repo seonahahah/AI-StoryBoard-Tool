@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI, Type } from "@google/genai";
+import { supabase } from './lib/supabase';
 
 // --- Types ---
 interface Shot {
@@ -72,57 +73,46 @@ const RATIOS = [
   { label: '2.39:1', value: '2.39:1', icon: <Film size={16} /> },
 ];
 
-function getLocalProjects() {
-  return Object.keys(localStorage)
-    .filter(k => k.startsWith('sb_project_'))
-    .map(k => {
-      try { 
-        const data = JSON.parse(localStorage.getItem(k) || '');
-        return { ...data, key: k };
+async function compressImage(
+  base64: string,
+  maxWidth = 800,
+  quality = 0.7
+): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      
+      // 비율 유지하면서 maxWidth로 축소
+      let width = img.width;
+      let height = img.height;
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
       }
-      catch { return null; }
-    })
-    .filter(Boolean)
-    .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // JPEG로 압축 (PNG보다 훨씬 작음)
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = base64;
+  });
 }
 
-function saveLocalProject(data: any) {
-  try {
-    const key = 'sb_project_' + Date.now();
-    const payload = JSON.stringify({
-      id: key,
-      savedAt: new Date().toISOString(),
-      projectTitle: data.projectTitle || '',
-      scenarioText: data.scenarioText || '',
-      aspectRatio: data.aspectRatio || '16:9',
-      shotList: data.shotList || [],
-      storyboardPrompts: data.storyboardPrompts || {},
-      finalImages: data.finalImages || {},
-      currentStep: data.currentStep || 1
-    });
-
-    console.log('setItem 호출 직전 key:', key);
-    console.log('setItem 호출 직전 payload 길이:', payload.length);
-
-    localStorage.setItem(key, payload);
-
-    console.log('setItem 완료, 확인:', localStorage.getItem(key) ? '성공' : '실패');
-
-    // 최대 10개 유지
-    const keys = Object.keys(localStorage)
-      .filter(k => k.startsWith('sb_project_'))
-      .sort();
-    if (keys.length > 10) {
-      keys.slice(0, keys.length - 10).forEach(k => localStorage.removeItem(k));
-    }
-
-    return true;
-  } catch (e: any) {
-    console.error('로컬 저장 실패:', e);
-    console.error('에러 상세:', e.name, e.message);
-    return false;
-  }
-}
+const formatDate = (isoString: string) => {
+  const d = new Date(isoString);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}.${mm}.${dd} ${hh}:${min}`;
+};
 
 // --- App Component ---
 export default function App() {
@@ -144,38 +134,162 @@ export default function App() {
 
   const [showSaveMenu, setShowSaveMenu] = useState(false);
   const [showLoadMenu, setShowLoadMenu] = useState(false);
-  const [localProjects, setLocalProjects] = useState<any[]>(getLocalProjects());
+  const [showCloudListModal, setShowCloudListModal] = useState(false);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [projectList, setProjectList] = useState<any[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadInputRef = useRef<HTMLInputElement>(null);
   const pdfExportRef = useRef<HTMLDivElement>(null);
 
-  // --- Helpers ---
-  const loadLocalProject = (key: string) => {
+  // --- Supabase Functions ---
+  const fetchProjectList = async () => {
     try {
-      const data = JSON.parse(localStorage.getItem(key) || '');
-      setProjectTitle(data.projectTitle || '');
-      setScenarioText(data.scenarioText || '');
-      setAspectRatio(data.aspectRatio || '16:9');
-      setShotList(data.shotList || []);
-      setStoryboardPrompts(data.storyboardPrompts || {});
-      setFinalImages(data.finalImages || {});
-      setCurrentStep(data.currentStep || 1);
-      showToast('이전 작업을 불러왔습니다 ✓');
-      setShowLoadMenu(false);
-    } catch (e) {
-      console.error('Failed to load local project', e);
-      setError('프로젝트를 불러오는데 실패했습니다.');
+      const { data, error } = await supabase
+        .from('storyboard_projects')
+        .select('id, title, project_title, updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(20);
+      
+      if (error) throw error;
+      setProjectList(data || []);
+    } catch (err) {
+      console.error('Error fetching project list:', err);
     }
   };
 
-  const deleteLocalProject = (key: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    localStorage.removeItem(key);
-    setLocalProjects(getLocalProjects());
-    showToast('삭제되었습니다.');
+  const saveToSupabase = async () => {
+    try {
+      showToast('이미지 압축 중...', 'success');
+
+      // finalImages 압축
+      const compressedFinalImages: Record<string, string> = {};
+      for (const [key, img] of Object.entries(finalImages)) {
+        compressedFinalImages[key] = await compressImage(img as string, 800, 0.7);
+      }
+
+      // shotList referenceImage 압축
+      const compressedShotList = await Promise.all(
+        shotList.map(async (shot) => {
+          if (shot.referenceImage) {
+            return {
+              ...shot,
+              referenceImage: await compressImage(shot.referenceImage as string, 600, 0.7)
+            };
+          }
+          return shot;
+        })
+      );
+
+      showToast('저장 중...', 'success');
+
+      const payload = {
+        title: projectTitle || 'Untitled',
+        project_title: projectTitle,
+        scenario_text: scenarioText,
+        aspect_ratio: aspectRatio,
+        shot_list: compressedShotList,
+        storyboard_prompts: storyboardPrompts,
+        final_images: compressedFinalImages,
+        current_step: currentStep,
+        updated_at: new Date().toISOString()
+      };
+
+      if (currentProjectId) {
+        const { error } = await supabase
+          .from('storyboard_projects')
+          .update(payload)
+          .eq('id', currentProjectId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from('storyboard_projects')
+          .insert(payload)
+          .select()
+          .single();
+        if (error) throw error;
+        if (data) setCurrentProjectId(data.id);
+      }
+
+      // 10개 초과 시 자동 삭제
+      const trimOldProjects = async () => {
+        const { data } = await supabase
+          .from('storyboard_projects')
+          .select('id, created_at')
+          .order('created_at', { ascending: true });
+
+        if (data && data.length > 10) {
+          const toDelete = data.slice(0, data.length - 10);
+          const idsToDelete = toDelete.map(p => p.id);
+          await supabase
+            .from('storyboard_projects')
+            .delete()
+            .in('id', idsToDelete);
+          console.log(`오래된 프로젝트 ${idsToDelete.length}개 삭제됨`);
+        }
+      };
+      await trimOldProjects();
+
+      showToast('저장되었습니다 ✓');
+      fetchProjectList();
+      setShowSaveMenu(false);
+    } catch (err: any) {
+      console.error('Error saving to Supabase:', err);
+      showToast('저장 실패: ' + err.message, 'error');
+    }
   };
 
+  const loadFromSupabase = async (id: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('storyboard_projects')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error) throw error;
+      if (data) {
+        setProjectTitle(data.project_title || '');
+        setScenarioText(data.scenario_text || '');
+        setAspectRatio(data.aspect_ratio || '16:9');
+        setShotList(data.shot_list || []);
+        setStoryboardPrompts(data.storyboard_prompts || {});
+        setFinalImages(data.final_images || {});
+        setCurrentStep(data.current_step || 1);
+        setCurrentProjectId(data.id);
+        showToast('불러왔습니다 ✓');
+        setShowCloudListModal(false);
+        setShowLoadMenu(false);
+      }
+    } catch (err: any) {
+      console.error('Error loading from Supabase:', err);
+      showToast('불러오기 실패: ' + err.message, 'error');
+    }
+  };
+
+  const deleteFromSupabase = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      const { error } = await supabase
+        .from('storyboard_projects')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      if (currentProjectId === id) setCurrentProjectId(null);
+      fetchProjectList();
+      showToast('삭제되었습니다');
+    } catch (err: any) {
+      console.error('Error deleting from Supabase:', err);
+      showToast('삭제 실패: ' + err.message, 'error');
+    }
+  };
+
+  useEffect(() => {
+    fetchProjectList();
+  }, []);
+
+  // --- Helpers ---
   const parseDuration = (durationStr: string): number => {
     const match = durationStr.match(/\d+/);
     return match ? parseInt(match[0], 10) : 0;
@@ -368,6 +482,7 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
         setStoryboardPrompts({});
         setFinalImages({});
         setCurrentStep(1);
+        setCurrentProjectId(null);
         setShowConfirm(null);
       }
     });
@@ -410,14 +525,7 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
         setFinalImages(d.finalImages || {});
         const nextStep = loadedShots.length ? 2 : 1;
         setCurrentStep(nextStep);
-        
-        // Save to local storage immediately with the loaded data
-        const ok = saveLocalProject({
-          ...d,
-          shotList: loadedShots,
-          currentStep: nextStep
-        });
-        if (ok) setLocalProjects(getLocalProjects());
+        setCurrentProjectId(null); // File load resets cloud ID
 
         showToast('프로젝트를 불러왔습니다 ✓');
         e.target.value = ''; // Reset input
@@ -677,35 +785,11 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                         <span>💾 파일로 저장</span>
                       </button>
                       <button 
-                        onClick={() => {
-                          console.log('저장 버튼 클릭됨');
-                          console.log('현재 projectTitle:', projectTitle);
-                          console.log('현재 shotList 길이:', shotList.length);
-
-                          const snapshot = {
-                            projectTitle: projectTitle,
-                            scenarioText: scenarioText,
-                            aspectRatio: aspectRatio,
-                            shotList: [...shotList],
-                            storyboardPrompts: {...storyboardPrompts},
-                            finalImages: {...finalImages},
-                            currentStep: currentStep
-                          };
-                          
-                          console.log('저장 시도 데이터:', snapshot);
-                          const ok = saveLocalProject(snapshot);
-                          if (ok) {
-                            showToast('로컬에 저장되었습니다 ✓');
-                            setLocalProjects(getLocalProjects());
-                          } else {
-                            showToast('저장 실패: 저장 공간이 부족합니다', 'error');
-                          }
-                          setShowSaveMenu(false);
-                        }}
+                        onClick={saveToSupabase}
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors text-left"
                       >
                         <Activity size={16} className="text-emerald-400" />
-                        <span>🗂 저장 (로컬)</span>
+                        <span>☁️ 클라우드 저장</span>
                       </button>
                     </div>
                   </>
@@ -730,30 +814,13 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                           <Upload size={16} className="text-violet-400" />
                           <span>📂 파일로 불러오기</span>
                         </button>
-                      </div>
-                      <div className="max-h-64 overflow-y-auto p-1">
-                        <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">📋 로컬 프로젝트 목록</div>
-                        {localProjects.length === 0 ? (
-                          <div className="px-4 py-4 text-center text-xs text-slate-500">저장된 프로젝트가 없습니다</div>
-                        ) : (
-                          localProjects.map(p => (
-                            <div key={p.key} className="group flex items-center gap-2 px-2 py-1">
-                              <button 
-                                onClick={() => loadLocalProject(p.key)}
-                                className="flex-1 flex flex-col px-2 py-1.5 text-left hover:bg-white/5 rounded-lg transition-colors"
-                              >
-                                <span className="text-xs font-bold text-slate-200 truncate">{p.title}</span>
-                                <span className="text-[10px] text-slate-500">{new Date(p.savedAt).toLocaleString()}</span>
-                              </button>
-                              <button 
-                                onClick={(e) => deleteLocalProject(p.key, e)}
-                                className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          ))
-                        )}
+                        <button 
+                          onClick={() => { setShowCloudListModal(true); setShowLoadMenu(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors text-left rounded-lg"
+                        >
+                          <Activity size={16} className="text-emerald-400" />
+                          <span>☁️ 클라우드 목록</span>
+                        </button>
                       </div>
                     </div>
                   </>
@@ -844,22 +911,24 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                           onChange={uploadTxt} 
                         />
                       </div>
-                      {localProjects.length > 0 && (
+                      {projectList.length > 0 && (
                         <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                          {localProjects.slice(0, 3).map(p => (
+                          {projectList.slice(0, 3).map(p => (
                             <div 
-                              key={p.key}
+                              key={p.id}
                               className="relative group min-w-[200px] bg-white/5 border border-white/10 rounded-xl p-3 hover:bg-white/10 transition-all cursor-pointer"
-                              onClick={() => loadLocalProject(p.key)}
+                              onClick={() => loadFromSupabase(p.id)}
                             >
                               <button 
-                                onClick={(e) => deleteLocalProject(p.key, e)}
+                                onClick={(e) => deleteFromSupabase(p.id, e)}
                                 className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 text-slate-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
                               >
                                 <X size={12} />
                               </button>
-                              <div className="text-sm font-bold text-slate-200 truncate pr-6 mb-1">{p.title}</div>
-                              <div className="text-[10px] text-slate-500">{new Date(p.savedAt).toLocaleString()}</div>
+                              <div className="text-sm truncate pr-6 mb-1">
+                                <span className="font-bold text-slate-200">{p.title || 'Untitled'}</span>
+                                <span className="text-[10px] text-slate-500 font-normal"> ({formatDate(p.updated_at)})</span>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1562,6 +1631,81 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
           AI Storyboard Generator · Powered by Gemini 3.1 Flash
         </p>
       </footer>
+      {/* --- Cloud List Modal --- */}
+      <AnimatePresence>
+        {showCloudListModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowCloudListModal(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl bg-[#1a1625] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
+            >
+              <div className="flex items-center justify-between p-6 border-b border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                    <Activity className="text-emerald-400" size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">클라우드 프로젝트 목록</h2>
+                    <p className="text-xs text-slate-500">최근 저장된 20개의 프로젝트를 표시합니다.</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowCloudListModal(false)}
+                  className="p-2 hover:bg-white/5 rounded-lg text-slate-400 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4">
+                {projectList.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-slate-500 gap-4">
+                    <FolderOpen size={48} className="opacity-20" />
+                    <p>저장된 프로젝트가 없습니다.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {projectList.map(p => (
+                      <div 
+                        key={p.id}
+                        onClick={() => loadFromSupabase(p.id)}
+                        className="group flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-violet-500/30 transition-all cursor-pointer"
+                      >
+                        <div className="flex flex-col gap-1">
+                          <div className="text-slate-200 group-hover:text-violet-400 transition-colors">
+                            <span className="font-bold">{p.title || 'Untitled'}</span>
+                            <span className="text-xs text-slate-500 font-normal"> ({formatDate(p.updated_at)})</span>
+                          </div>
+                          <span className="text-[10px] text-slate-600 flex items-center gap-1">
+                            <Clock size={10} />
+                            최종 수정: {new Date(p.updated_at).toLocaleString()}
+                          </span>
+                        </div>
+                        <button 
+                          onClick={(e) => deleteFromSupabase(p.id, e)}
+                          className="p-2.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* --- Modals & Toasts --- */}
       <AnimatePresence>
         {showConfirm && (
