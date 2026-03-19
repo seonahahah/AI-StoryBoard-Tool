@@ -72,50 +72,6 @@ const RATIOS = [
   { label: '2.39:1', value: '2.39:1', icon: <Film size={16} /> },
 ];
 
-const SAMPLES: Record<string, { title: string; text: string }> = {
-  hotel_popo: {
-    title: 'HOTEL POPO',
-    text: `호텔포포 30초 광고 – 최종 전체 시나리오
-
-컨셉: "나와 반려견의 하루가 완벽하게 맞춰지는 곳, Hotel Popo"
-웨스 앤더슨식 완벽 대칭미와 파스텔 색감을 활용해 반려견과 함께하는 럭셔리한 하루를 담아낸다.
-
-Scene 1 Shot 1: 기차역 티켓 카운터. 파스텔 핑크 제복의 역무원이 티켓을 건넨다. 주인공과 반려 포메라니안이 설레는 눈빛으로 받는다. Wide shot, 대칭 구도, 따뜻한 파스텔톤.
-Scene 1 Shot 2: 달리는 기차 창문. 주인공이 강아지를 무릎에 앉히고 차창 밖 풍경을 바라본다. Medium shot, Eye-level, 황금빛 오후 햇살.
-Scene 1 Shot 3: 기차 창밖으로 보이는 호텔포포 전경. 파스텔 민트색 건물이 언덕 위에 우뚝 솟아있다. Extreme Wide Shot, High Angle.
-Scene 2 Shot 1: 호텔 정문 도착. 벨보이 두 명이 완벽한 대칭으로 문을 열어준다. Wide shot, 정면 구도, 웨스 앤더슨 스타일.
-Scene 2 Shot 2: 체크인 카운터. 직원이 강아지 전용 웰컴 패키지를 건넨다. 강아지가 앞발을 들어 받는다. Close-up, Over-the-counter angle.
-Scene 3 Shot 1: 파스텔 톤의 호텔 객실. 강아지 전용 미니 침대와 장난감이 놓여있다. Wide shot, 대칭 구도.
-Scene 3 Shot 2: 루프탑 수영장. 주인공과 강아지가 나란히 선베드에 누워있다. Medium shot, Eye-level, 황금빛 석양.`
-  },
-  scifi: {
-    title: '빛의 연금술사: 색의 서약',
-    text: `SF 단편 영화 – 빛의 연금술사: 색의 서약
-
-컨셉: 모든 색이 사라진 세계에서 색을 기억하는 유일한 소녀 레나의 이야기.
-
-Scene 1 Shot 1: 광활한 흑백 도시의 조감. 건물, 거리, 하늘 모두 흑백. 카메라가 천천히 하강하며 색 잃은 세계의 황량함을 드러낸다. Extreme Long Shot, Bird's-eye view, 천천히 하강하는 크레인 샷.
-Scene 1 Shot 2: 도심 거리. 사람들이 무표정하게 걷는다. 눈빛에서 감정이 사라졌다. Long Shot, Eye-level, 군중을 따라가다 크레인 업.
-Scene 1 Shot 3: 다락방 내부. 작은 창으로 회색 빛이 들어온다. 레나가 낡은 스케치북을 무릎에 올리고 홀로 앉아있다. Medium Shot, Eye-level, Static with gentle push-in.
-Scene 2 Shot 1: 레나의 스케치북 클로즈업. 색연필로 그린 선명한 빨간 장미가 흑백 세계와 극명한 대조를 이룬다. Extreme Close-up, Top-down angle.
-Scene 2 Shot 2: 레나가 장미를 그리자 실제 꽃잎 하나가 색을 되찾는다. 빛이 번지듯 색이 퍼진다. Close-up, Eye-level, Slow zoom out.
-Scene 3 Shot 1: 색이 퍼지는 도시 전경. 흑백에서 천천히 색이 물드는 타임랩스. Extreme Long Shot, High Angle, Time-lapse.`
-  },
-  action: {
-    title: 'LAST SIGNAL',
-    text: `액션 스릴러 단편 – LAST SIGNAL
-
-컨셉: 72시간 안에 도시를 구해야 하는 전직 요원의 이야기.
-
-Scene 1 Shot 1: 거대한 지하 서버룸의 익스트림 와이드 샷. 차갑게 빛나는 서버 랙들과 케이블이 가득하다. 'AUTO-DELETE: 60:00' 카운트다운이 표시된다. Extreme Long Shot, High Angle, 24mm.
-Scene 1 Shot 2: 컴퓨터 모니터의 차가운 빛에 비친 진의 얼굴 미디엄 클로즈업. 절망감과 피로감이 역력하다. Medium Close-up, Eye-level, 50mm.
-Scene 1 Shot 3: 'AUTO-DELETE: 59:XX' 카운트다운 클로즈업. 숫자들이 깜빡이며 긴박함을 더한다. Close-up, Eye-level, 85mm.
-Scene 2 Shot 1: 진이 고개를 들고 놀란다. 루미나가 화면 뒤에서 걸어 들어오며 가슴 데이터 장치에서 홀로그램이 빛난다. Medium Shot, Over the shoulder, 35mm.
-Scene 2 Shot 2: 진과 루미나가 레이저 보안 격자를 피해 서버에 접근한다. Wide Shot, Low Angle, 24mm.
-Scene 3 Shot 1: 서버 메인 패널 앞. 두 사람이 마지막 코드를 입력한다. 카운트다운 00:03. Extreme Close-up, Eye-level, 85mm.`
-  }
-};
-
 // --- App Component ---
 export default function App() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -134,16 +90,87 @@ export default function App() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
   const [showSaveMenu, setShowSaveMenu] = useState(false);
+  const [showLoadMenu, setShowLoadMenu] = useState(false);
+  const [localProjects, setLocalProjects] = useState<any[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadInputRef = useRef<HTMLInputElement>(null);
   const pdfExportRef = useRef<HTMLDivElement>(null);
 
-  const AUTOSAVE_KEY = 'ai_storyboard_autosave';
-
   // --- Helpers ---
+  const getLocalProjects = () => {
+    const projects: any[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('sb_project_')) {
+        try {
+          const data = JSON.parse(localStorage.getItem(key) || '');
+          projects.push({ ...data, key });
+        } catch (e) {
+          console.error('Failed to parse local project', e);
+        }
+      }
+    }
+    return projects.sort((a, b) => b.savedAt - a.savedAt);
+  };
+
+  useEffect(() => {
+    setLocalProjects(getLocalProjects());
+  }, []);
+
+  const saveLocalProject = () => {
+    const projects = getLocalProjects();
+    if (projects.length >= 10) {
+      // Delete oldest
+      const oldest = projects[projects.length - 1];
+      localStorage.removeItem(oldest.key);
+    }
+
+    const id = 'sb_project_' + Date.now();
+    const data = {
+      id,
+      title: projectTitle || 'Untitled Project',
+      savedAt: Date.now(),
+      projectTitle,
+      scenarioText,
+      aspectRatio,
+      shotList,
+      storyboardPrompts,
+      finalImages,
+      currentStep
+    };
+    localStorage.setItem(id, JSON.stringify(data));
+    setLocalProjects(getLocalProjects());
+    showToast('로컬에 저장되었습니다 ✓');
+    setShowSaveMenu(false);
+  };
+
+  const loadLocalProject = (key: string) => {
+    try {
+      const data = JSON.parse(localStorage.getItem(key) || '');
+      setProjectTitle(data.projectTitle || '');
+      setScenarioText(data.scenarioText || '');
+      setAspectRatio(data.aspectRatio || '16:9');
+      setShotList(data.shotList || []);
+      setStoryboardPrompts(data.storyboardPrompts || {});
+      setFinalImages(data.finalImages || {});
+      setCurrentStep(data.currentStep || 1);
+      showToast('이전 작업을 불러왔습니다 ✓');
+      setShowLoadMenu(false);
+    } catch (e) {
+      console.error('Failed to load local project', e);
+      setError('프로젝트를 불러오는데 실패했습니다.');
+    }
+  };
+
+  const deleteLocalProject = (key: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    localStorage.removeItem(key);
+    setLocalProjects(getLocalProjects());
+    showToast('삭제되었습니다.');
+  };
+
   const parseDuration = (durationStr: string): number => {
     const match = durationStr.match(/\d+/);
     return match ? parseInt(match[0], 10) : 0;
@@ -159,45 +186,6 @@ export default function App() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
-
-  // --- Auto-save & Restore ---
-  useEffect(() => {
-    const saved = localStorage.getItem(AUTOSAVE_KEY);
-    if (saved) {
-      try {
-        const d = JSON.parse(saved);
-        setProjectTitle(d.projectTitle || '');
-        setScenarioText(d.scenarioText || '');
-        setAspectRatio(d.aspectRatio || '16:9');
-        setShotList(d.shotList || []);
-        setStoryboardPrompts(d.storyboardPrompts || {});
-        setFinalImages(d.finalImages || {});
-        setCurrentStep(d.currentStep || 1);
-        showToast('이전 작업을 불러왔습니다 ✓');
-      } catch (e) {
-        console.error('Failed to restore autosave', e);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const data = {
-        projectTitle,
-        scenarioText,
-        aspectRatio,
-        shotList,
-        storyboardPrompts,
-        finalImages,
-        currentStep
-      };
-      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
-      const now = new Date();
-      setLastSavedTime(`${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [projectTitle, scenarioText, aspectRatio, shotList, storyboardPrompts, finalImages, currentStep]);
 
   const totalSeconds = shotList.reduce((acc, shot) => acc + parseDuration(shot.duration), 0);
   const avgSeconds = shotList.length > 0 ? (totalSeconds / shotList.length).toFixed(1) : 0;
@@ -375,27 +363,7 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
         setStoryboardPrompts({});
         setFinalImages({});
         setCurrentStep(1);
-        localStorage.removeItem(AUTOSAVE_KEY);
-        setLastSavedTime(null);
         setShowConfirm(null);
-      }
-    });
-  };
-
-  const resetAutosave = () => {
-    setShowConfirm({
-      message: '자동저장 데이터를 초기화하고 새 프로젝트를 시작하시겠습니까?',
-      onConfirm: () => {
-        setProjectTitle('');
-        setScenarioText('');
-        setShotList([]);
-        setStoryboardPrompts({});
-        setFinalImages({});
-        setCurrentStep(1);
-        localStorage.removeItem(AUTOSAVE_KEY);
-        setLastSavedTime(null);
-        setShowConfirm(null);
-        setShowSaveMenu(false);
       }
     });
   };
@@ -437,6 +405,7 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
         setFinalImages(d.finalImages || {});
         if (loadedShots.length) setCurrentStep(2);
         showToast('프로젝트를 불러왔습니다 ✓');
+        e.target.value = ''; // Reset input
       } catch {
         setError('프로젝트 파일을 읽을 수 없습니다.');
       }
@@ -448,14 +417,11 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => setScenarioText(ev.target?.result as string);
+    reader.onload = (ev) => {
+      setScenarioText(ev.target?.result as string);
+      e.target.value = ''; // Reset input
+    };
     reader.readAsText(file, 'utf-8');
-  };
-
-  const loadSample = (key: string) => {
-    const s = SAMPLES[key];
-    setProjectTitle(s.title);
-    setScenarioText(s.text);
   };
 
   const addShot = () => {
@@ -668,9 +634,6 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                 <h1 className="text-xl font-extrabold bg-gradient-to-r from-violet-400 to-pink-400 bg-clip-text text-transparent">
                   AI Storyboard Generator
                 </h1>
-                {lastSavedTime && (
-                  <p className="text-[10px] text-slate-500 font-medium">자동 저장됨 {lastSavedTime}</p>
-                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -682,7 +645,7 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
               </button>
               <div className="relative">
                 <button 
-                  onClick={() => setShowSaveMenu(!showSaveMenu)}
+                  onClick={() => { setShowSaveMenu(!showSaveMenu); setShowLoadMenu(false); }}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-sm font-medium text-slate-300"
                 >
                   <Save size={16} /> 저장 <ChevronDown size={14} className={`transition-transform ${showSaveMenu ? 'rotate-180' : ''}`} />
@@ -699,22 +662,64 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                         <span>💾 파일로 저장</span>
                       </button>
                       <button 
-                        onClick={resetAutosave}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors text-left"
+                        onClick={saveLocalProject}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors text-left"
                       >
-                        <Trash2 size={16} />
-                        <span>🔄 자동저장 데이터 초기화</span>
+                        <Activity size={16} className="text-emerald-400" />
+                        <span>🗂 저장 (로컬)</span>
                       </button>
                     </div>
                   </>
                 )}
               </div>
-              <button 
-                onClick={() => loadInputRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-sm font-medium text-slate-300"
-              >
-                <FolderOpen size={16} /> 불러오기
-              </button>
+              <div className="relative">
+                <button 
+                  onClick={() => { setShowLoadMenu(!showLoadMenu); setShowSaveMenu(false); }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-sm font-medium text-slate-300"
+                >
+                  <FolderOpen size={16} /> 불러오기 <ChevronDown size={14} className={`transition-transform ${showLoadMenu ? 'rotate-180' : ''}`} />
+                </button>
+                {showLoadMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowLoadMenu(false)} />
+                    <div className="absolute right-0 mt-2 w-72 bg-[#1a1625] border border-white/10 rounded-xl shadow-2xl z-20 overflow-hidden flex flex-col">
+                      <div className="p-1 border-b border-white/5">
+                        <button 
+                          onClick={() => { loadInputRef.current?.click(); setShowLoadMenu(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors text-left rounded-lg"
+                        >
+                          <Upload size={16} className="text-violet-400" />
+                          <span>📂 파일로 불러오기</span>
+                        </button>
+                      </div>
+                      <div className="max-h-64 overflow-y-auto p-1">
+                        <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">📋 로컬 프로젝트 목록</div>
+                        {localProjects.length === 0 ? (
+                          <div className="px-4 py-4 text-center text-xs text-slate-500">저장된 프로젝트가 없습니다</div>
+                        ) : (
+                          localProjects.map(p => (
+                            <div key={p.key} className="group flex items-center gap-2 px-2 py-1">
+                              <button 
+                                onClick={() => loadLocalProject(p.key)}
+                                className="flex-1 flex flex-col px-2 py-1.5 text-left hover:bg-white/5 rounded-lg transition-colors"
+                              >
+                                <span className="text-xs font-bold text-slate-200 truncate">{p.title}</span>
+                                <span className="text-[10px] text-slate-500">{new Date(p.savedAt).toLocaleString()}</span>
+                              </button>
+                              <button 
+                                onClick={(e) => deleteLocalProject(p.key, e)}
+                                className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
               <input 
                 ref={loadInputRef}
                 type="file" 
@@ -800,18 +805,26 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                           onChange={uploadTxt} 
                         />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-500 uppercase">샘플 로드:</span>
-                        {Object.keys(SAMPLES).map(key => (
-                          <button 
-                            key={key}
-                            onClick={() => loadSample(key)}
-                            className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-medium text-slate-400 hover:bg-white/10 hover:text-slate-200 transition-all"
-                          >
-                            {SAMPLES[key].title}
-                          </button>
-                        ))}
-                      </div>
+                      {localProjects.length > 0 && (
+                        <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                          {localProjects.slice(0, 3).map(p => (
+                            <div 
+                              key={p.key}
+                              className="relative group min-w-[200px] bg-white/5 border border-white/10 rounded-xl p-3 hover:bg-white/10 transition-all cursor-pointer"
+                              onClick={() => loadLocalProject(p.key)}
+                            >
+                              <button 
+                                onClick={(e) => deleteLocalProject(p.key, e)}
+                                className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 text-slate-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                              >
+                                <X size={12} />
+                              </button>
+                              <div className="text-sm font-bold text-slate-200 truncate pr-6 mb-1">{p.title}</div>
+                              <div className="text-[10px] text-slate-500">{new Date(p.savedAt).toLocaleString()}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
