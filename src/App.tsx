@@ -72,6 +72,51 @@ const RATIOS = [
   { label: '2.39:1', value: '2.39:1', icon: <Film size={16} /> },
 ];
 
+function getLocalProjects() {
+  return Object.keys(localStorage)
+    .filter(k => k.startsWith('sb_project_'))
+    .map(k => {
+      try { 
+        const data = JSON.parse(localStorage.getItem(k) || '');
+        return { ...data, key: k };
+      }
+      catch { return null; }
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+}
+
+function saveLocalProject(data: any) {
+  try {
+    const key = 'sb_project_' + Date.now();
+    const payload = JSON.stringify({
+      id: key,
+      savedAt: new Date().toISOString(),
+      projectTitle: data.projectTitle || '',
+      scenarioText: data.scenarioText || '',
+      aspectRatio: data.aspectRatio || '16:9',
+      shotList: data.shotList || [],
+      storyboardPrompts: data.storyboardPrompts || {},
+      finalImages: data.finalImages || {},
+      currentStep: data.currentStep || 1
+    });
+    localStorage.setItem(key, payload);
+
+    // 최대 10개 유지
+    const keys = Object.keys(localStorage)
+      .filter(k => k.startsWith('sb_project_'))
+      .sort();
+    if (keys.length > 10) {
+      keys.slice(0, keys.length - 10).forEach(k => localStorage.removeItem(k));
+    }
+
+    return true;
+  } catch (e) {
+    console.error('로컬 저장 실패:', e);
+    return false;
+  }
+}
+
 // --- App Component ---
 export default function App() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -92,71 +137,13 @@ export default function App() {
 
   const [showSaveMenu, setShowSaveMenu] = useState(false);
   const [showLoadMenu, setShowLoadMenu] = useState(false);
-  const [localProjects, setLocalProjects] = useState<any[]>([]);
+  const [localProjects, setLocalProjects] = useState<any[]>(getLocalProjects());
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadInputRef = useRef<HTMLInputElement>(null);
   const pdfExportRef = useRef<HTMLDivElement>(null);
 
   // --- Helpers ---
-  const getLocalProjects = () => {
-    const projects: any[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith('sb_project_')) {
-        try {
-          const data = JSON.parse(localStorage.getItem(key) || '');
-          projects.push({ ...data, key });
-        } catch (e) {
-          console.error('Failed to parse local project', e);
-        }
-      }
-    }
-    return projects.sort((a, b) => b.savedAt - a.savedAt);
-  };
-
-  useEffect(() => {
-    setLocalProjects(getLocalProjects());
-  }, []);
-
-  const saveLocalProject = (overrideData?: any) => {
-    try {
-      const projects = getLocalProjects();
-      if (projects.length >= 10) {
-        // Delete oldest
-        const oldest = projects[projects.length - 1];
-        localStorage.removeItem(oldest.key);
-      }
-
-      const id = 'sb_project_' + Date.now();
-      const data = {
-        id,
-        title: (overrideData?.projectTitle || projectTitle) || 'Untitled Project',
-        savedAt: Date.now(),
-        projectTitle: overrideData?.projectTitle ?? projectTitle,
-        scenarioText: overrideData?.scenarioText ?? scenarioText,
-        aspectRatio: overrideData?.aspectRatio ?? aspectRatio,
-        shotList: overrideData?.shotList ?? shotList,
-        storyboardPrompts: overrideData?.storyboardPrompts ?? storyboardPrompts,
-        finalImages: overrideData?.finalImages ?? finalImages,
-        currentStep: overrideData?.currentStep ?? currentStep
-      };
-      
-      localStorage.setItem(id, JSON.stringify(data));
-      
-      // Debug log
-      const saved = localStorage.getItem(id);
-      console.log('Project saved to local storage:', JSON.parse(saved || '{}'));
-
-      setLocalProjects(getLocalProjects());
-      showToast('로컬에 저장되었습니다 ✓');
-      setShowSaveMenu(false);
-    } catch (e) {
-      console.error('Failed to save local project', e);
-      showToast('저장 실패: localStorage 용량을 초과했을 수 있습니다', 'error');
-    }
-  };
-
   const loadLocalProject = (key: string) => {
     try {
       const data = JSON.parse(localStorage.getItem(key) || '');
@@ -418,11 +405,12 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
         setCurrentStep(nextStep);
         
         // Save to local storage immediately with the loaded data
-        saveLocalProject({
+        const ok = saveLocalProject({
           ...d,
           shotList: loadedShots,
           currentStep: nextStep
         });
+        if (ok) setLocalProjects(getLocalProjects());
 
         showToast('프로젝트를 불러왔습니다 ✓');
         e.target.value = ''; // Reset input
@@ -683,7 +671,7 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                       </button>
                       <button 
                         onClick={() => {
-                          saveLocalProject({
+                          const data = {
                             projectTitle,
                             scenarioText,
                             aspectRatio,
@@ -691,7 +679,16 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                             storyboardPrompts,
                             finalImages,
                             currentStep
-                          });
+                          };
+                          console.log('저장 시도 데이터:', data);
+                          const ok = saveLocalProject(data);
+                          if (ok) {
+                            showToast('로컬에 저장되었습니다 ✓');
+                            setLocalProjects(getLocalProjects());
+                          } else {
+                            showToast('저장 실패: 저장 공간이 부족합니다', 'error');
+                          }
+                          setShowSaveMenu(false);
                         }}
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors text-left"
                       >
