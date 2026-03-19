@@ -195,20 +195,17 @@ export default function App() {
         updated_at: new Date().toISOString()
       };
 
-      if (currentProjectId) {
-        const { error } = await supabase
-          .from('storyboard_projects')
-          .update(payload)
-          .eq('id', currentProjectId);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from('storyboard_projects')
-          .insert(payload)
-          .select()
-          .single();
-        if (error) throw error;
-        if (data) setCurrentProjectId(data.id);
+      // 기존 if/else 분기 제거하고 항상 insert
+      const { data, error } = await supabase
+        .from('storyboard_projects')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (data) setCurrentProjectId(data.id);
+      if (error) {
+        showToast('저장 실패: ' + error.message, 'error');
+        return;
       }
 
       // 10개 초과 시 자동 삭제
