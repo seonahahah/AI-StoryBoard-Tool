@@ -100,7 +100,13 @@ function saveLocalProject(data: any) {
       finalImages: data.finalImages || {},
       currentStep: data.currentStep || 1
     });
+
+    console.log('setItem 호출 직전 key:', key);
+    console.log('setItem 호출 직전 payload 길이:', payload.length);
+
     localStorage.setItem(key, payload);
+
+    console.log('setItem 완료, 확인:', localStorage.getItem(key) ? '성공' : '실패');
 
     // 최대 10개 유지
     const keys = Object.keys(localStorage)
@@ -111,8 +117,9 @@ function saveLocalProject(data: any) {
     }
 
     return true;
-  } catch (e) {
+  } catch (e: any) {
     console.error('로컬 저장 실패:', e);
+    console.error('에러 상세:', e.name, e.message);
     return false;
   }
 }
@@ -671,17 +678,22 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                       </button>
                       <button 
                         onClick={() => {
-                          const data = {
-                            projectTitle,
-                            scenarioText,
-                            aspectRatio,
-                            shotList,
-                            storyboardPrompts,
-                            finalImages,
-                            currentStep
+                          console.log('저장 버튼 클릭됨');
+                          console.log('현재 projectTitle:', projectTitle);
+                          console.log('현재 shotList 길이:', shotList.length);
+
+                          const snapshot = {
+                            projectTitle: projectTitle,
+                            scenarioText: scenarioText,
+                            aspectRatio: aspectRatio,
+                            shotList: [...shotList],
+                            storyboardPrompts: {...storyboardPrompts},
+                            finalImages: {...finalImages},
+                            currentStep: currentStep
                           };
-                          console.log('저장 시도 데이터:', data);
-                          const ok = saveLocalProject(data);
+                          
+                          console.log('저장 시도 데이터:', snapshot);
+                          const ok = saveLocalProject(snapshot);
                           if (ok) {
                             showToast('로컬에 저장되었습니다 ✓');
                             setLocalProjects(getLocalProjects());
