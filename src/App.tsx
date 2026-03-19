@@ -120,6 +120,8 @@ export default function App() {
   const [currentStep, setCurrentStep] = useState(1);
   const [projectTitle, setProjectTitle] = useState('');
   const [scenarioText, setScenarioText] = useState('');
+  const [scenarioMode, setScenarioMode] = useState<'text' | 'visual'>('text');
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [shotList, setShotList] = useState<Shot[]>([]);
   const [storyboardPrompts, setStoryboardPrompts] = useState<Record<string, PromptData>>({});
@@ -321,9 +323,57 @@ export default function App() {
     setError(null);
 
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `당신은 전문 영화 촬영 감독 및 스토리보드 아티스트입니다.
+      const contents: any[] = [];
+
+      if (scenarioMode === 'visual' && referenceImages.length > 0) {
+        // 이미지 파트 추가
+        for (const img of referenceImages) {
+          const [header, data] = img.split(',');
+          const mimeType = header.split(':')[1].split(';')[0];
+          contents.push({
+            inlineData: {
+              mimeType: mimeType,
+              data: data
+            }
+          });
+        }
+        // 텍스트 파트 추가
+        contents.push({
+          text: `당신은 전문 영화 촬영 감독 및 스토리보드 아티스트입니다. 
+제공된 레퍼런스 이미지들의 색감, 구도, 조명, 분위기를 깊이 있게 분석하여 아래 시나리오 설명에 어울리는 상세한 샷 리스트를 생성하세요.
+각 샷의 'description'과 'colorPalette', 'cameraAngle' 등은 이미지의 시각적 요소를 최대한 반영해야 합니다.
+
+프로젝트: ${projectTitle || 'Untitled'}
+시나리오 설명:
+${scenarioText}
+
+반드시 아래 JSON 형식만 출력하세요 (마크다운 코드블록, 설명 없이 순수 JSON):
+{
+  "shots": [
+    {
+      "scene": 1,
+      "shot": 1,
+      "title": "씬 제목",
+      "description": "상세 설명 (한국어, 2-3문장)",
+      "duration": "5 seconds",
+      "shotSize": "Extreme Long Shot",
+      "cameraAngle": "High Angle",
+      "lens": "24mm",
+      "movement": "Static",
+      "ratio": "${aspectRatio}",
+      "colorPalette": "이미지에서 분석된 색감",
+      "note": "촬영 주의사항"
+    }
+  ]
+}
+
+shotSize 옵션: Extreme Long Shot, Long Shot, Medium Shot, Medium Close-up, Close-up, Extreme Close-up
+cameraAngle 옵션: High Angle, Eye-level, Low Angle, Bird's-eye view, Over the shoulder, Dutch angle
+시나리오에서 최대한 추출하고 없으면 내용에 맞게 추론하세요. 최소 5개 이상의 샷을 생성하세요.`
+        });
+      } else {
+        contents.push({
+          text: `당신은 전문 영화 촬영 감독 및 스토리보드 아티스트입니다.
 아래 시나리오를 분석하여 각 씬과 샷에 대한 상세한 샷 리스트를 JSON 형식으로 생성하세요.
 
 프로젝트: ${projectTitle || 'Untitled'}
@@ -352,7 +402,13 @@ ${scenarioText}
 
 shotSize 옵션: Extreme Long Shot, Long Shot, Medium Shot, Medium Close-up, Close-up, Extreme Close-up
 cameraAngle 옵션: High Angle, Eye-level, Low Angle, Bird's-eye view, Over the shoulder, Dutch angle
-시나리오에서 최대한 추출하고 없으면 내용에 맞게 추론하세요. 최소 5개 이상의 샷을 생성하세요.`,
+시나리오에서 최대한 추출하고 없으면 내용에 맞게 추론하세요. 최소 5개 이상의 샷을 생성하세요.`
+        });
+      }
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: contents,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -954,11 +1010,90 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                   </div>
 
                   <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
-                    <label className="block text-sm font-semibold text-slate-400 uppercase tracking-wider">시나리오</label>
+                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                      <label className="block text-sm font-semibold text-slate-400 uppercase tracking-wider">시나리오</label>
+                      <div className="flex items-center gap-1 bg-black/20 p-1 rounded-xl border border-white/5">
+                        <button 
+                          onClick={() => setScenarioMode('text')}
+                          className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all ${
+                            scenarioMode === 'text' 
+                              ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' 
+                              : 'text-slate-500 hover:text-slate-300'
+                          }`}
+                        >
+                          Text
+                        </button>
+                        <button 
+                          onClick={() => setScenarioMode('visual')}
+                          className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all ${
+                            scenarioMode === 'visual' 
+                              ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' 
+                              : 'text-slate-500 hover:text-slate-300'
+                          }`}
+                        >
+                          Visual
+                        </button>
+                      </div>
+                    </div>
+
+                    {scenarioMode === 'visual' && (
+                      <div className="space-y-3 pb-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                          {referenceImages.map((img, idx) => (
+                            <motion.div 
+                              key={idx} 
+                              initial={{ opacity: 0, scale: 0.9 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group shadow-lg"
+                            >
+                              <img src={img} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              <button 
+                                onClick={() => setReferenceImages(prev => prev.filter((_, i) => i !== idx))}
+                                className="absolute top-1.5 right-1.5 p-1.5 bg-black/60 backdrop-blur-md rounded-lg text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500"
+                              >
+                                <X size={12} />
+                              </button>
+                            </motion.div>
+                          ))}
+                          <label className="aspect-square rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 hover:border-violet-500/50 transition-all group">
+                            <input 
+                              type="file" 
+                              multiple 
+                              accept="image/*" 
+                              className="hidden" 
+                              onChange={async (e) => {
+                                const files = Array.from(e.target.files || []) as File[];
+                                const newImages: string[] = [];
+                                for (const file of files) {
+                                  const reader = new FileReader();
+                                  const base64 = await new Promise<string>((resolve) => {
+                                    reader.onload = (ev) => resolve(ev.target?.result as string);
+                                    reader.readAsDataURL(file);
+                                  });
+                                  const compressed = await compressImage(base64, 800, 0.7);
+                                  newImages.push(compressed);
+                                }
+                                setReferenceImages(prev => [...prev, ...newImages]);
+                              }}
+                            />
+                            <ImageIcon size={20} className="text-slate-500 group-hover:text-violet-400 transition-colors" />
+                            <span className="text-[10px] font-bold text-slate-500 group-hover:text-violet-400 uppercase tracking-widest">Add Image</span>
+                          </label>
+                        </div>
+                        <p className="text-[10px] text-slate-500 italic">
+                          * 여러 장의 이미지를 업로드하면 AI가 전체적인 색감과 구도를 통합 분석합니다.
+                        </p>
+                      </div>
+                    )}
+
                     <textarea 
                       value={scenarioText}
                       onChange={(e) => setScenarioText(e.target.value)}
-                      placeholder="시나리오를 여기에 입력하세요. 씬과 샷 정보가 포함될수록 더 정확한 샷 리스트가 생성됩니다..."
+                      placeholder={
+                        scenarioMode === 'visual' 
+                          ? "이미지에 대한 설명이나 시나리오의 흐름을 입력하세요. AI가 이미지와 텍스트를 함께 분석합니다..."
+                          : "시나리오를 여기에 입력하세요. 씬과 샷 정보가 포함될수록 더 정확한 샷 리스트가 생성됩니다..."
+                      }
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-base leading-relaxed min-h-[400px] focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all resize-none"
                     />
                     <div className="flex items-center justify-between gap-4 flex-wrap pt-2">
