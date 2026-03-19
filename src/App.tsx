@@ -11,6 +11,7 @@ import {
   Copy, 
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Download,
   Loader2,
   CheckCircle2,
@@ -616,6 +617,51 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
     setShotList(newList);
   };
 
+  const updateShotNumber = (idx: number, field: 'scene' | 'shot', value: number) => {
+    const oldShot = shotList[idx];
+    const oldKey = `${oldShot.scene}-${oldShot.shot}`;
+    
+    const newList = [...shotList];
+    const newShot = { ...oldShot, [field]: value };
+    newList[idx] = newShot;
+    setShotList(newList);
+
+    const newKey = `${newShot.scene}-${newShot.shot}`;
+    if (oldKey !== newKey) {
+      // Migrate prompt if exists
+      if (storyboardPrompts[oldKey]) {
+        setStoryboardPrompts(prev => {
+          const next = { ...prev };
+          next[newKey] = next[oldKey];
+          // Only delete if no other shot uses this old key
+          const stillUsed = newList.some((s, i) => i !== idx && `${s.scene}-${s.shot}` === oldKey);
+          if (!stillUsed) delete next[oldKey];
+          return next;
+        });
+      }
+      // Migrate final image if exists
+      if (finalImages[oldKey]) {
+        setFinalImages(prev => {
+          const next = { ...prev };
+          next[newKey] = next[oldKey];
+          const stillUsed = newList.some((s, i) => i !== idx && `${s.scene}-${s.shot}` === oldKey);
+          if (!stillUsed) delete next[oldKey];
+          return next;
+        });
+      }
+    }
+  };
+
+  const moveShot = (idx: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && idx === 0) return;
+    if (direction === 'down' && idx === shotList.length - 1) return;
+
+    const newList = [...shotList];
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    [newList[idx], newList[targetIdx]] = [newList[targetIdx], newList[idx]];
+    setShotList(newList);
+  };
+
   const exportToPDF = async () => {
     if (shotList.length === 0) return;
     setIsExporting(true);
@@ -1040,6 +1086,19 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                       <Plus size={18} /> 샷 추가
                     </button>
                     <button 
+                      onClick={() => {
+                        const sorted = [...shotList].sort((a, b) => {
+                          if (a.scene !== b.scene) return a.scene - b.scene;
+                          return a.shot - b.shot;
+                        });
+                        setShotList(sorted);
+                        showToast('씬/샷 순서로 정렬되었습니다.');
+                      }}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-sm font-bold text-slate-300"
+                    >
+                      <Hash size={18} /> 정렬
+                    </button>
+                    <button 
                       onClick={handleGenerateShotList}
                       disabled={isGenerating}
                       className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-sm font-bold text-slate-300 disabled:opacity-50"
@@ -1132,10 +1191,10 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                         <tr key={shot.id} className="hover:bg-white/[0.02] transition-colors group">
                           <td className="p-4 align-top">
                             <div className="flex flex-col gap-1">
-                              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-violet-500/20 text-violet-400 font-black text-xs">
+                              <span className="flex items-center justify-center w-10 h-8 rounded-lg bg-violet-500/20 text-violet-400 font-black text-xs" title="SCENE">
                                 {shot.scene}
                               </span>
-                              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-pink-500/20 text-pink-400 font-black text-xs">
+                              <span className="flex items-center justify-center w-10 h-8 rounded-lg bg-pink-500/20 text-pink-400 font-black text-xs" title="SHOT">
                                 {shot.shot}
                               </span>
                             </div>
@@ -1314,9 +1373,27 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                                 onClick={() => deleteShot(idx)}
                                 className="p-2 rounded-lg hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
                                 title="삭제"
-                              >
+                               >
                                 <Trash2 size={16} />
                               </button>
+                              <div className="flex flex-col border-l border-white/10 pl-1">
+                                <button 
+                                  onClick={() => moveShot(idx, 'up')}
+                                  disabled={idx === 0}
+                                  className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-white transition-colors disabled:opacity-20"
+                                  title="위로 이동"
+                                >
+                                  <ChevronUp size={14} />
+                                </button>
+                                <button 
+                                  onClick={() => moveShot(idx, 'down')}
+                                  disabled={idx === shotList.length - 1}
+                                  className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-white transition-colors disabled:opacity-20"
+                                  title="아래로 이동"
+                                >
+                                  <ChevronDown size={14} />
+                                </button>
+                              </div>
                             </div>
                           </td>
                         </tr>
