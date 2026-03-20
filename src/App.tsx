@@ -60,6 +60,7 @@ interface PromptData {
 interface ProjectData {
   projectTitle: string;
   scenarioText: string;
+  referenceImages: string[];
   aspectRatio: string;
   shotList: Shot[];
   storyboardPrompts: Record<string, PromptData>;
@@ -316,13 +317,17 @@ export default function App() {
         })
       );
 
+      const compressedReferenceImages = await Promise.all(
+        referenceImages.map(img => compressImage(img, 800, 0.7))
+      );
+
       showToast('저장 중...', 'success');
 
       const payload = {
         title: projectTitle || 'Untitled',
         project_title: projectTitle,
         scenario_text: scenarioText,
-        reference_images: referenceImages,
+        reference_images: compressedReferenceImages,
         aspect_ratio: aspectRatio,
         shot_list: compressedShotList,
         storyboard_prompts: storyboardPrompts,
@@ -708,7 +713,7 @@ ${shot.referenceImage ? "4. 첨부된 레퍼런스 이미지의 스타일을 반
   };
 
   const saveProject = () => {
-    const data: ProjectData = { projectTitle, scenarioText, aspectRatio, shotList, storyboardPrompts, finalImages };
+    const data: ProjectData = { projectTitle, scenarioText, referenceImages, aspectRatio, shotList, storyboardPrompts, finalImages };
     const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -726,6 +731,7 @@ ${shot.referenceImage ? "4. 첨부된 레퍼런스 이미지의 스타일을 반
         const d: ProjectData = JSON.parse(ev.target?.result as string);
         setProjectTitle(d.projectTitle || '');
         setScenarioText(d.scenarioText || '');
+        setReferenceImages(d.referenceImages || []);
         setAspectRatio(d.aspectRatio || '16:9');
         const loadedShots = (d.shotList || []).map(s => ({
           ...s,
