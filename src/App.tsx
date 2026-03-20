@@ -408,6 +408,7 @@ export default function App() {
       
       if (error) throw error;
       if (currentProjectId === id) setCurrentProjectId(null);
+      setReferenceImages([]);
       fetchProjectList();
       showToast('삭제되었습니다');
     } catch (err: any) {
