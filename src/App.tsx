@@ -57,10 +57,16 @@ interface PromptData {
   negativePrompt: string;
 }
 
+interface ReferenceImage {
+  id: string;
+  url: string;
+  role: 'start' | 'end' | 'none';
+}
+
 interface ProjectData {
   projectTitle: string;
   scenarioText: string;
-  referenceImages: string[];
+  referenceImages: ReferenceImage[];
   aspectRatio: string;
   shotList: Shot[];
   storyboardPrompts: Record<string, PromptData>;
@@ -238,7 +244,7 @@ export default function App() {
   const [projectTitle, setProjectTitle] = useState('');
   const [scenarioText, setScenarioText] = useState('');
   const [scenarioMode, setScenarioMode] = useState<'text' | 'visual'>('text');
-  const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [shotList, setShotList] = useState<Shot[]>([]);
   const [storyboardPrompts, setStoryboardPrompts] = useState<Record<string, PromptData>>({});
@@ -341,7 +347,10 @@ export default function App() {
       );
 
       const compressedReferenceImages = await Promise.all(
-        referenceImages.map(img => compressImage(img, 800, 0.7))
+        referenceImages.map(async (img) => ({
+          ...img,
+          url: await compressImage(img.url, 800, 0.7)
+        }))
       );
 
       showToast('저장 중...', 'success');
@@ -488,18 +497,34 @@ export default function App() {
       const parts: any[] = [];
 
       if (scenarioMode === 'visual' && referenceImages.length > 0) {
-        for (const img of referenceImages) {
+        // 이미지들을 순서대로 추가하되, 역할 정보를 텍스트로 보강
+        let imageContext = "제공된 이미지들은 다음과 같은 역할을 합니다:\n";
+        
+        for (let i = 0; i < referenceImages.length; i++) {
+          const img = referenceImages[i];
           try {
-            const [header, data] = img.split(',');
+            const [header, data] = img.url.split(',');
             const mimeType = header.split(':')[1].split(';')[0];
             parts.push({ inlineData: { mimeType, data } });
+            
+            const roleText = img.role === 'start' ? '첫 프레임(시작)' : img.role === 'end' ? '엔드 프레임(종료)' : '참고 이미지';
+            imageContext += `- 이미지 ${i + 1}: ${roleText}\n`;
           } catch (e) {
             console.error('이미지 파싱 오류:', e);
           }
         }
+
         parts.push({
           text: `당신은 전문 영화 촬영 감독 및 스토리보드 아티스트입니다. 
-제공된 레퍼런스 이미지들의 색감, 구도, 조명, 분위기를 깊이 있게 분석하여 아래 시나리오 설명에 어울리는 상세한 샷 리스트를 생성하세요.
+제공된 모든 레퍼런스 이미지들을 하나의 연속된 시각적 흐름으로 분석하여, 전체적인 분위기와 구도를 반영한 상세한 샷 리스트를 생성하세요.
+
+${imageContext}
+
+[지침]
+1. '첫 프레임'이 지정되었다면 이를 시퀀스의 시작점으로 삼으세요.
+2. '엔드 프레임'이 지정되었다면 이를 시퀀스의 최종 결말로 삼으세요.
+3. 나머지 참고 이미지들의 스타일, 색감, 조명을 전체 샷 리스트에 골고루 반영하여 일관성 있는 비주얼을 유지하세요.
+4. 단순히 이미지 1개당 샷 1개가 아니라, 이미지들 사이의 서사를 상상하여 자연스럽게 이어지는 5~10개의 샷을 구성하세요.
 
 프로젝트: ${projectTitle || 'Untitled'}
 시나리오 설명:
@@ -586,10 +611,20 @@ ${scenarioText}
       const data = JSON.parse(response.text);
       if (!data.shots || !Array.isArray(data.shots)) throw new Error('올바르지 않은 데이터 형식입니다.');
 
-      setShotList(data.shots.map((s: any) => ({
-        ...s,
-        id: Math.random().toString(36).substring(2, 11)
-      })));
+      const startImg = referenceImages.find(img => img.role === 'start');
+      const endImg = referenceImages.find(img => img.role === 'end');
+
+      setShotList(data.shots.map((s: any, idx: number) => {
+        let refImg = undefined;
+        if (idx === 0 && startImg) refImg = startImg.url;
+        else if (idx === data.shots.length - 1 && endImg) refImg = endImg.url;
+
+        return {
+          ...s,
+          id: Math.random().toString(36).substring(2, 11),
+          referenceImage: refImg
+        };
+      }));
       setCurrentStep(2);
       showToast('샷 리스트가 생성되었습니다!');
     } catch (err: any) {
@@ -1097,21 +1132,54 @@ ${shot.referenceImage ? "4. 첨부된 레퍼런스 이미지의 스타일을 반
                     </div>
 
                     {scenarioMode === 'visual' && (
-                      <div className="space-y-3 pb-2 outline-none" onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }} onDrop={async (e) => { e.preventDefault(); e.stopPropagation(); const files = Array.from(e.dataTransfer.files) as File[]; const imageFiles = files.filter(f => f.type.startsWith('image/')); if (imageFiles.length > 0) { const newImages: string[] = []; for (const file of imageFiles) { const reader = new FileReader(); const base64 = await new Promise<string>((resolve) => { reader.onload = (ev) => resolve(ev.target?.result as string); reader.readAsDataURL(file); }); const compressed = await compressImage(base64, 800, 0.7); newImages.push(compressed); } setReferenceImages(prev => [...prev, ...newImages]); } }} onPaste={async (e) => { const items = Array.from(e.clipboardData.items) as DataTransferItem[]; const imageItems = items.filter(item => item.type.startsWith('image/')); if (imageItems.length > 0) { const newImages: string[] = []; for (const item of imageItems) { const file = item.getAsFile(); if (file) { const reader = new FileReader(); const base64 = await new Promise<string>((resolve) => { reader.onload = (ev) => resolve(ev.target?.result as string); reader.readAsDataURL(file); }); const compressed = await compressImage(base64, 800, 0.7); newImages.push(compressed); } } setReferenceImages(prev => [...prev, ...newImages]); } }} tabIndex={0}>
+                      <div className="space-y-3 pb-2 outline-none" onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }} onDrop={async (e) => { e.preventDefault(); e.stopPropagation(); const files = Array.from(e.dataTransfer.files) as File[]; const imageFiles = files.filter(f => f.type.startsWith('image/')); if (imageFiles.length > 0) { const newImages: ReferenceImage[] = []; for (const file of imageFiles) { const reader = new FileReader(); const base64 = await new Promise<string>((resolve) => { reader.onload = (ev) => resolve(ev.target?.result as string); reader.readAsDataURL(file); }); const compressed = await compressImage(base64, 800, 0.7); newImages.push({ id: Math.random().toString(36).substring(7), url: compressed, role: 'none' }); } setReferenceImages(prev => [...prev, ...newImages]); } }} onPaste={async (e) => { const items = Array.from(e.clipboardData.items) as DataTransferItem[]; const imageItems = items.filter(item => item.type.startsWith('image/')); if (imageItems.length > 0) { const newImages: ReferenceImage[] = []; for (const item of imageItems) { const file = item.getAsFile(); if (file) { const reader = new FileReader(); const base64 = await new Promise<string>((resolve) => { reader.onload = (ev) => resolve(ev.target?.result as string); reader.readAsDataURL(file); }); const compressed = await compressImage(base64, 800, 0.7); newImages.push({ id: Math.random().toString(36).substring(7), url: compressed, role: 'none' }); } } setReferenceImages(prev => [...prev, ...newImages]); } }} tabIndex={0}>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                           {referenceImages.map((img, idx) => (
-                            <motion.div key={idx} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group shadow-lg">
-                              <img src={img} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                              <button onClick={() => setReferenceImages(prev => prev.filter((_, i) => i !== idx))} className="absolute top-1.5 right-1.5 p-1.5 bg-black/60 rounded-lg text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500" style={{ backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}><X size={12} /></button>
+                            <motion.div key={img.id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group shadow-lg">
+                              <img src={img.url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              
+                              {/* Role Badges */}
+                              {img.role !== 'none' && (
+                                <div className={`absolute top-1.5 left-1.5 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter ${img.role === 'start' ? 'bg-emerald-500 text-white' : 'bg-blue-500 text-white'}`}>
+                                  {img.role === 'start' ? 'Start Frame' : 'End Frame'}
+                                </div>
+                              )}
+
+                              {/* Hover Controls */}
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-2">
+                                <div className="flex items-center gap-1">
+                                  <button 
+                                    onClick={() => {
+                                      setReferenceImages(prev => prev.map(item => 
+                                        item.id === img.id ? { ...item, role: item.role === 'start' ? 'none' : 'start' } : item
+                                      ));
+                                    }}
+                                    className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-all ${img.role === 'start' ? 'bg-emerald-500 text-white' : 'bg-white/20 text-white hover:bg-white/40'}`}
+                                  >
+                                    Start
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      setReferenceImages(prev => prev.map(item => 
+                                        item.id === img.id ? { ...item, role: item.role === 'end' ? 'none' : 'end' } : item
+                                      ));
+                                    }}
+                                    className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-all ${img.role === 'end' ? 'bg-blue-500 text-white' : 'bg-white/20 text-white hover:bg-white/40'}`}
+                                  >
+                                    End
+                                  </button>
+                                </div>
+                                <button onClick={() => setReferenceImages(prev => prev.filter(item => item.id !== img.id))} className="p-1.5 bg-red-500/80 rounded-lg text-white hover:bg-red-600 transition-all"><X size={12} /></button>
+                              </div>
                             </motion.div>
                           ))}
                           <label className="aspect-square rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 hover:border-violet-500/50 transition-all group">
-                            <input type="file" multiple accept="image/*" className="hidden" onChange={async (e) => { const files = Array.from(e.target.files || []) as File[]; const newImages: string[] = []; for (const file of files) { const reader = new FileReader(); const base64 = await new Promise<string>((resolve) => { reader.onload = (ev) => resolve(ev.target?.result as string); reader.readAsDataURL(file); }); const compressed = await compressImage(base64, 800, 0.7); newImages.push(compressed); } setReferenceImages(prev => [...prev, ...newImages]); }} />
+                            <input type="file" multiple accept="image/*" className="hidden" onChange={async (e) => { const files = Array.from(e.target.files || []) as File[]; const newImages: ReferenceImage[] = []; for (const file of files) { const reader = new FileReader(); const base64 = await new Promise<string>((resolve) => { reader.onload = (ev) => resolve(ev.target?.result as string); reader.readAsDataURL(file); }); const compressed = await compressImage(base64, 800, 0.7); newImages.push({ id: Math.random().toString(36).substring(7), url: compressed, role: 'none' }); } setReferenceImages(prev => [...prev, ...newImages]); }} />
                             <ImageIcon size={20} className="text-slate-500 group-hover:text-violet-400 transition-colors" />
                             <span className="text-[10px] font-bold text-slate-500 group-hover:text-violet-400 uppercase tracking-widest text-center px-2">Add Image<br/>(Drag & Drop or Paste)</span>
                           </label>
                         </div>
-                        <p className="text-[10px] text-slate-500 italic">* 여러 장의 이미지를 업로드하면 AI가 전체적인 색감과 구도를 통합 분석합니다.</p>
+                        <p className="text-[10px] text-slate-500 italic">* 여러 장의 이미지를 업로드하면 AI가 전체적인 색감과 구도를 통합 분석합니다. 각 이미지에 'Start' 또는 'End' 프레임 역할을 지정할 수 있습니다.</p>
                       </div>
                     )}
 
