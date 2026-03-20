@@ -71,7 +71,7 @@ interface ProjectData {
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-// gemini-3.1-flash 무료 티어 기준 일일 한도는 1500회(RPD)입니다.
+// gemini-flash-latest 무료 티어 기준 일일 한도는 1500회(RPD)입니다.
 const DEFAULT_FREE_LIMIT = 1500;
 const TIER1_LIMIT = 2000; // 유료 계정 Tier 1 권장 일일 한도 (Flash 모델은 쿼터가 넉넉합니다)
 const STORAGE_KEY = 'gemini_usage';
@@ -545,7 +545,7 @@ ${scenarioText}
       }
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.1-flash",
+        model: "gemini-flash-latest",
         contents: [{ role: 'user', parts }],
         config: {
           responseMimeType: "application/json",
@@ -641,7 +641,7 @@ ${shot.referenceImage ? "4. 첨부된 레퍼런스 이미지의 스타일을 반
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash",
+      model: "gemini-flash-latest",
       contents: [{ role: 'user', parts }],
       config: {
         responseMimeType: "application/json",
@@ -1455,7 +1455,7 @@ ${shot.referenceImage ? "4. 첨부된 레퍼런스 이미지의 스타일을 반
       </main>
 
       <footer className="max-w-[1400px] mx-auto p-6 border-t border-white/5 text-center">
-        <p className="text-xs font-medium text-slate-600 uppercase tracking-widest">AI Storyboard Generator · Powered by Gemini 3.1 Flash</p>
+        <p className="text-xs font-medium text-slate-600 uppercase tracking-widest">AI Storyboard Generator · Powered by Gemini Flash</p>
       </footer>
 
       {/* --- Cloud List Modal --- */}
