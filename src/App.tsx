@@ -322,6 +322,7 @@ export default function App() {
         title: projectTitle || 'Untitled',
         project_title: projectTitle,
         scenario_text: scenarioText,
+        reference_images: referenceImages,
         aspect_ratio: aspectRatio,
         shot_list: compressedShotList,
         storyboard_prompts: storyboardPrompts,
@@ -380,6 +381,7 @@ export default function App() {
       if (data) {
         setProjectTitle(data.project_title || '');
         setScenarioText(data.scenario_text || '');
+        setReferenceImages(data.reference_images || []); 
         setAspectRatio(data.aspect_ratio || '16:9');
         setShotList(data.shot_list || []);
         setStoryboardPrompts(data.storyboard_prompts || {});
