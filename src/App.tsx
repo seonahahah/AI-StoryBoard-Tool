@@ -677,6 +677,9 @@ ${shot.referenceImage ? "4. 첨부된 레퍼런스 이미지의 스타일을 반
         console.error(`Error generating prompt for shot ${key}:`, err);
         if (handleApiError(err)) break; // 할당량 초과면 중단
       }
+      if (i < shotList.length - 1) {
+  await new Promise(resolve => setTimeout(resolve, 3000));
+}
       setGenerationProgress(Math.round(((i + 1) / shotList.length) * 100));
     }
 
