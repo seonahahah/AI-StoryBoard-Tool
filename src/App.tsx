@@ -71,10 +71,11 @@ interface ProjectData {
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-// 무료 티어 일일 한도 (gemini-1.5-pro 기준 50회, flash 기준 1500회)
-// gemini-3.1-pro-preview 기준으로 보수적으로 50으로 설정
-const DAILY_LIMIT = 250;
+// gemini-3.1-pro-preview 무료 티어 기준 일일 한도는 50회입니다.
+const DEFAULT_FREE_LIMIT = 50;
+const TIER1_LIMIT = 1000; // 유료 계정 Tier 1 권장 일일 한도
 const STORAGE_KEY = 'gemini_usage';
+const SETTINGS_KEY = 'gemini_settings';
 
 const RATIOS = [
   { label: '16:9', value: '16:9', icon: <Monitor size={16} /> },
@@ -109,6 +110,14 @@ function getTodayUsage(): number {
   const today = new Date().toISOString().slice(0, 10);
   const data = getUsageData();
   return data.date === today ? data.count : 0;
+}
+
+function getUsageSettings(): { isPaid: boolean } {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { isPaid: false };
 }
 
 async function compressImage(
@@ -147,7 +156,7 @@ const formatDate = (isoString: string) => {
 };
 
 // --- Usage Badge Component ---
-function UsageBadge({ count, limit }: { count: number; limit: number }) {
+function UsageBadge({ count, limit, isPaid, onToggle }: { count: number; limit: number; isPaid: boolean; onToggle: () => void }) {
   const remaining = limit - count;
   const percent = (count / limit) * 100;
 
@@ -162,9 +171,13 @@ function UsageBadge({ count, limit }: { count: number; limit: number }) {
     'bg-emerald-400';
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold ${color}`}>
-      <Zap size={13} />
-      <span>오늘 {count} / {limit}회</span>
+    <div 
+      onClick={onToggle}
+      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer hover:scale-105 transition-all ${color}`}
+      title={isPaid ? "유료 계정 Tier 1 모드 (클릭하여 전환)" : "무료 티어 모드 (클릭하여 전환)"}
+    >
+      <Zap size={13} className={isPaid ? "fill-emerald-400" : ""} />
+      <span>{isPaid ? 'Tier 1' : 'FREE'} {count} / {limit}회</span>
       <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-500 ${barColor}`}
@@ -237,7 +250,17 @@ export default function App() {
 
   // --- NEW: Usage & Quota state ---
   const [usageCount, setUsageCount] = useState(getTodayUsage());
+  const [isPaidAccount, setIsPaidAccount] = useState(getUsageSettings().isPaid);
   const [quotaError, setQuotaError] = useState<{ retrySeconds: number } | null>(null);
+
+  const dailyLimit = isPaidAccount ? TIER1_LIMIT : DEFAULT_FREE_LIMIT;
+
+  const toggleAccountType = () => {
+    const newValue = !isPaidAccount;
+    setIsPaidAccount(newValue);
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ isPaid: newValue }));
+    showToast(newValue ? '유료 계정 Tier 1 모드로 전환되었습니다.' : '무료 티어 모드로 전환되었습니다.');
+  };
 
   const [showConfirm, setShowConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -948,7 +971,12 @@ ${shot.referenceImage ? "4. 첨부된 레퍼런스 이미지의 스타일을 반
 
             {/* ✅ NEW: Usage Badge in header center */}
             <div className="flex items-center gap-2">
-              <UsageBadge count={usageCount} limit={DAILY_LIMIT} />
+              <UsageBadge 
+                count={usageCount} 
+                limit={dailyLimit} 
+                isPaid={isPaidAccount}
+                onToggle={toggleAccountType}
+              />
             </div>
 
             <div className="flex items-center gap-2">
