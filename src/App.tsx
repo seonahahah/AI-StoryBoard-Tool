@@ -408,7 +408,6 @@ export default function App() {
       
       if (error) throw error;
       if (currentProjectId === id) setCurrentProjectId(null);
-      setReferenceImages([]);
       fetchProjectList();
       showToast('삭제되었습니다');
     } catch (err: any) {
@@ -700,6 +699,7 @@ ${shot.referenceImage ? "4. 첨부된 레퍼런스 이미지의 스타일을 반
         setShotList([]);
         setStoryboardPrompts({});
         setFinalImages({});
+        setReferenceImages([]); 
         setCurrentStep(1);
         setCurrentProjectId(null);
         setShowConfirm(null);
