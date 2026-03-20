@@ -74,6 +74,10 @@ const RATIOS = [
   { label: '2.39:1', value: '2.39:1', icon: <Film size={16} /> },
 ];
 
+const SHOT_SIZES = ['Extreme Long Shot','Long Shot','Medium Shot','Medium Close-up','Close-up','Extreme Close-up'];
+const CAMERA_ANGLES = ["High Angle","Eye-level","Low Angle","Bird's-eye view","Over the shoulder","Dutch angle"];
+const LENSES = ['14mm','24mm','35mm','50mm','85mm','100mm','135mm'];
+
 async function compressImage(
   base64: string,
   maxWidth = 800,
@@ -868,7 +872,7 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
   return (
     <div className="min-h-screen bg-[#0f0c1a] text-slate-200 font-sans selection:bg-violet-500/30">
       {/* --- Header --- */}
-      <header className="sticky top-0 z-50 bg-[#0f0c1a]/95 backdrop-blur-xl border-b border-violet-500/20 px-6">
+      <header className="sticky top-0 z-50 bg-[#0f0c1a]/95 border-b border-violet-500/20 px-6" style={{ backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)' }}>
         <div className="max-w-[1400px] mx-auto">
           <div className="flex items-center justify-between py-4 gap-4 flex-wrap">
             <div className="flex items-center gap-3">
@@ -1037,7 +1041,53 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                     </div>
 
                     {scenarioMode === 'visual' && (
-                      <div className="space-y-3 pb-2">
+                      <div 
+                        className="space-y-3 pb-2 outline-none"
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onDrop={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const files = Array.from(e.dataTransfer.files) as File[];
+                          const imageFiles = files.filter(f => f.type.startsWith('image/'));
+                          if (imageFiles.length > 0) {
+                            const newImages: string[] = [];
+                            for (const file of imageFiles) {
+                              const reader = new FileReader();
+                              const base64 = await new Promise<string>((resolve) => {
+                                reader.onload = (ev) => resolve(ev.target?.result as string);
+                                reader.readAsDataURL(file);
+                              });
+                              const compressed = await compressImage(base64, 800, 0.7);
+                              newImages.push(compressed);
+                            }
+                            setReferenceImages(prev => [...prev, ...newImages]);
+                          }
+                        }}
+                        onPaste={async (e) => {
+                          const items = Array.from(e.clipboardData.items) as DataTransferItem[];
+                          const imageItems = items.filter(item => item.type.startsWith('image/'));
+                          if (imageItems.length > 0) {
+                            const newImages: string[] = [];
+                            for (const item of imageItems) {
+                              const file = item.getAsFile();
+                              if (file) {
+                                const reader = new FileReader();
+                                const base64 = await new Promise<string>((resolve) => {
+                                  reader.onload = (ev) => resolve(ev.target?.result as string);
+                                  reader.readAsDataURL(file);
+                                });
+                                const compressed = await compressImage(base64, 800, 0.7);
+                                newImages.push(compressed);
+                              }
+                            }
+                            setReferenceImages(prev => [...prev, ...newImages]);
+                          }
+                        }}
+                        tabIndex={0}
+                      >
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                           {referenceImages.map((img, idx) => (
                             <motion.div 
@@ -1049,7 +1099,8 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                               <img src={img} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               <button 
                                 onClick={() => setReferenceImages(prev => prev.filter((_, i) => i !== idx))}
-                                className="absolute top-1.5 right-1.5 p-1.5 bg-black/60 backdrop-blur-md rounded-lg text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500"
+                                className="absolute top-1.5 right-1.5 p-1.5 bg-black/60 rounded-lg text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500"
+                                style={{ backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
                               >
                                 <X size={12} />
                               </button>
@@ -1077,7 +1128,9 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                               }}
                             />
                             <ImageIcon size={20} className="text-slate-500 group-hover:text-violet-400 transition-colors" />
-                            <span className="text-[10px] font-bold text-slate-500 group-hover:text-violet-400 uppercase tracking-widest">Add Image</span>
+                            <span className="text-[10px] font-bold text-slate-500 group-hover:text-violet-400 uppercase tracking-widest text-center px-2">
+                              Add Image<br/>(Drag & Drop or Paste)
+                            </span>
                           </label>
                         </div>
                         <p className="text-[10px] text-slate-500 italic">
@@ -1204,7 +1257,7 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
+              className="space-y-6 w-full min-h-[400px]"
             >
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div>
@@ -1307,8 +1360,8 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
               )}
 
               <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                <div className="overflow-x-auto w-full">
+                  <table className="w-full min-w-[1000px] text-left border-collapse">
                     <thead>
                       <tr className="bg-violet-500/10">
                         <th className="p-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">씬/샷</th>
@@ -1383,37 +1436,31 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
                             </div>
                           </td>
                           <td className="p-4 align-top">
-                            <select 
+                            <input 
+                              list="shot-sizes"
                               value={shot.shotSize}
                               onChange={(e) => updateShot(idx, 'shotSize', e.target.value)}
-                              className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none"
-                            >
-                              {['Extreme Long Shot','Long Shot','Medium Shot','Medium Close-up','Close-up','Extreme Close-up'].map(v => (
-                                <option key={v} value={v} className="bg-[#1a1035]">{v}</option>
-                              ))}
-                            </select>
+                              className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-violet-500/50"
+                              placeholder="직접 입력..."
+                            />
                           </td>
                           <td className="p-4 align-top">
-                            <select 
+                            <input 
+                              list="camera-angles"
                               value={shot.cameraAngle}
                               onChange={(e) => updateShot(idx, 'cameraAngle', e.target.value)}
-                              className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none"
-                            >
-                              {["High Angle","Eye-level","Low Angle","Bird's-eye view","Over the shoulder","Dutch angle"].map(v => (
-                                <option key={v} value={v} className="bg-[#1a1035]">{v}</option>
-                              ))}
-                            </select>
+                              className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-violet-500/50"
+                              placeholder="직접 입력..."
+                            />
                           </td>
                           <td className="p-4 align-top">
-                            <select 
+                            <input 
+                              list="lenses"
                               value={shot.lens}
                               onChange={(e) => updateShot(idx, 'lens', e.target.value)}
-                              className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none"
-                            >
-                              {['14mm','24mm','35mm','50mm','85mm','100mm','135mm'].map(v => (
-                                <option key={v} value={v} className="bg-[#1a1035]">{v}</option>
-                              ))}
-                            </select>
+                              className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-violet-500/50"
+                              placeholder="직접 입력..."
+                            />
                           </td>
                           <td className="p-4 align-top">
                             <div 
@@ -1888,7 +1935,8 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowCloudListModal(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/80"
+              style={{ backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -1954,10 +2002,21 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
         )}
       </AnimatePresence>
 
+      {/* --- Datalists for custom input --- */}
+      <datalist id="shot-sizes">
+        {SHOT_SIZES.map(v => <option key={v} value={v} />)}
+      </datalist>
+      <datalist id="camera-angles">
+        {CAMERA_ANGLES.map(v => <option key={v} value={v} />)}
+      </datalist>
+      <datalist id="lenses">
+        {LENSES.map(v => <option key={v} value={v} />)}
+      </datalist>
+
       {/* --- Modals & Toasts --- */}
       <AnimatePresence>
         {showConfirm && (
-          <div key="confirm-modal-overlay" className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div key="confirm-modal-overlay" className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60" style={{ backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -2004,7 +2063,8 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setSelectedImage(null)}
-            className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-sm flex items-center justify-center p-8 cursor-zoom-out"
+            className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-8 cursor-zoom-out"
+            style={{ backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
