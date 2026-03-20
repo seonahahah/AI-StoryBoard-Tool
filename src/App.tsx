@@ -66,6 +66,9 @@ interface ProjectData {
 }
 
 // --- Constants ---
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
 const RATIOS = [
   { label: '16:9', value: '16:9', icon: <Monitor size={16} /> },
   { label: '9:16', value: '9:16', icon: <Smartphone size={16} /> },
@@ -315,9 +318,12 @@ export default function App() {
   const progressPercent = Math.min((totalSeconds / 120) * 100, 100);
 
   // --- AI Logic ---
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-
   const handleGenerateShotList = async () => {
+    if (!GEMINI_API_KEY) {
+      setError('Gemini API 키가 설정되지 않았습니다. 설정에서 GEMINI_API_KEY를 추가해주세요.');
+      return;
+    }
+
     if (!scenarioText.trim()) {
       setError('시나리오를 먼저 입력해주세요.');
       return;
@@ -327,22 +333,26 @@ export default function App() {
     setError(null);
 
     try {
-      const contents: any[] = [];
+      const parts: any[] = [];
 
       if (scenarioMode === 'visual' && referenceImages.length > 0) {
         // 이미지 파트 추가
         for (const img of referenceImages) {
-          const [header, data] = img.split(',');
-          const mimeType = header.split(':')[1].split(';')[0];
-          contents.push({
-            inlineData: {
-              mimeType: mimeType,
-              data: data
-            }
-          });
+          try {
+            const [header, data] = img.split(',');
+            const mimeType = header.split(':')[1].split(';')[0];
+            parts.push({
+              inlineData: {
+                mimeType: mimeType,
+                data: data
+              }
+            });
+          } catch (e) {
+            console.error('이미지 파싱 오류:', e);
+          }
         }
         // 텍스트 파트 추가
-        contents.push({
+        parts.push({
           text: `당신은 전문 영화 촬영 감독 및 스토리보드 아티스트입니다. 
 제공된 레퍼런스 이미지들의 색감, 구도, 조명, 분위기를 깊이 있게 분석하여 아래 시나리오 설명에 어울리는 상세한 샷 리스트를 생성하세요.
 각 샷의 'description'과 'colorPalette', 'cameraAngle' 등은 이미지의 시각적 요소를 최대한 반영해야 합니다.
@@ -351,7 +361,7 @@ export default function App() {
 시나리오 설명:
 ${scenarioText}
 
-반드시 아래 JSON 형식만 출력하세요 (마크다운 코드블록, 설명 없이 순수 JSON):
+반드시 아래 JSON 형식만 출력하세요:
 {
   "shots": [
     {
@@ -376,7 +386,7 @@ cameraAngle 옵션: High Angle, Eye-level, Low Angle, Bird's-eye view, Over the 
 시나리오에서 최대한 추출하고 없으면 내용에 맞게 추론하세요. 최소 5개 이상의 샷을 생성하세요.`
         });
       } else {
-        contents.push({
+        parts.push({
           text: `당신은 전문 영화 촬영 감독 및 스토리보드 아티스트입니다.
 아래 시나리오를 분석하여 각 씬과 샷에 대한 상세한 샷 리스트를 JSON 형식으로 생성하세요.
 
@@ -384,7 +394,7 @@ cameraAngle 옵션: High Angle, Eye-level, Low Angle, Bird's-eye view, Over the 
 시나리오:
 ${scenarioText}
 
-반드시 아래 JSON 형식만 출력하세요 (마크다운 코드블록, 설명 없이 순수 JSON):
+반드시 아래 JSON 형식만 출력하세요:
 {
   "shots": [
     {
@@ -411,8 +421,8 @@ cameraAngle 옵션: High Angle, Eye-level, Low Angle, Bird's-eye view, Over the 
       }
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: contents,
+        model: "gemini-3.1-pro-preview",
+        contents: [{ role: 'user', parts: parts }],
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -445,52 +455,78 @@ cameraAngle 옵션: High Angle, Eye-level, Low Angle, Bird's-eye view, Over the 
         }
       });
 
+      if (!response.text) {
+        throw new Error('AI 응답이 비어 있습니다. 다시 시도해주세요.');
+      }
+
       const data = JSON.parse(response.text);
+      if (!data.shots || !Array.isArray(data.shots)) {
+        throw new Error('올바르지 않은 데이터 형식입니다.');
+      }
+
       setShotList(data.shots.map((s: any) => ({
         ...s,
         id: Math.random().toString(36).substring(2, 11)
       })));
       setCurrentStep(2);
+      showToast('샷 리스트가 생성되었습니다!');
     } catch (err: any) {
-      console.error(err);
-      setError('샷 리스트 생성 중 오류가 발생했습니다: ' + err.message);
+      console.error('Shot list generation error:', err);
+      setError('샷 리스트 생성 중 오류가 발생했습니다: ' + (err.message || '알 수 없는 오류'));
+      showToast('샷 리스트 생성 실패', 'error');
     } finally {
       setIsGenerating(false);
     }
   };
 
   const generatePromptForShot = async (shot: Shot): Promise<PromptData> => {
-    const promptText = `당신은 AI 이미지 생성 전문가입니다.
-아래 영화 샷 정보를 기반으로 Midjourney/DALL-E용 이미지 프롬프트를 생성하세요.
+    if (!GEMINI_API_KEY) {
+      throw new Error('Gemini API 키가 없습니다.');
+    }
 
+    const promptText = `당신은 AI 이미지 생성 전문가(Midjourney, DALL-E 3)입니다.
+아래 영화 샷 정보를 기반으로 시각적으로 매우 상세한 이미지 생성 프롬프트를 작성하세요.
+
+[샷 정보]
 프로젝트: ${projectTitle || 'Untitled'}
 Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
 설명: ${shot.description}
 샷 크기: ${shot.shotSize}
 카메라 앵글: ${shot.cameraAngle}
 렌즈: ${shot.lens}
-색감: ${shot.colorPalette}
+색감/분위기: ${shot.colorPalette}
 카메라 무브먼트: ${shot.movement}
+기타 참고: ${shot.note || '없음'}
 
-아래 JSON만 출력하세요 (마크다운 없이):
-{"prompt":"상세한 영문 이미지 생성 프롬프트 (120-160단어, 샷 타입/앵글/조명/분위기/색감/스타일 포함)","negativePrompt":"피해야 할 요소들"}${shot.referenceImage ? "\n\n첨부된 레퍼런스 이미지의 스타일, 색감, 분위기, 구도를 참고하여 이미지 생성 프롬프트를 작성해줘. 레퍼런스 이미지와 유사한 톤과 무드를 반영할 것." : ""}`;
+[작성 지침]
+1. 'prompt'는 반드시 영어로 작성하세요.
+2. 샷의 구도, 조명(Cinematic lighting, Volumetric fog 등), 질감, 스타일을 구체적으로 묘사하세요 (120-160단어).
+3. 'negativePrompt'에는 이미지에서 제외해야 할 요소들을 영어로 작성하세요.
+${shot.referenceImage ? "4. 첨부된 레퍼런스 이미지의 스타일, 색감, 분위기, 구도를 적극적으로 반영하여 일관성 있는 비주얼을 유지하세요." : ""}
+
+반드시 아래 JSON 형식만 출력하세요:
+{"prompt": "상세한 영문 프롬프트", "negativePrompt": "제외할 요소들"}`;
 
     const parts: any[] = [{ text: promptText }];
     
     if (shot.referenceImage) {
-      const base64Data = shot.referenceImage.split(',')[1];
-      const mimeType = shot.referenceImage.split(';')[0].split(':')[1] || 'image/jpeg';
-      parts.push({
-        inlineData: {
-          mimeType: mimeType,
-          data: base64Data
-        }
-      });
+      try {
+        const base64Data = shot.referenceImage.split(',')[1];
+        const mimeType = shot.referenceImage.split(';')[0].split(':')[1] || 'image/jpeg';
+        parts.push({
+          inlineData: {
+            mimeType: mimeType,
+            data: base64Data
+          }
+        });
+      } catch (e) {
+        console.error('레퍼런스 이미지 처리 오류:', e);
+      }
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: { parts },
+      model: "gemini-3.1-pro-preview",
+      contents: [{ role: 'user', parts: parts }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -503,6 +539,10 @@ Scene ${shot.scene} Shot ${shot.shot}: ${shot.title}
         }
       }
     });
+
+    if (!response.text) {
+      throw new Error('AI 응답이 비어 있습니다.');
+    }
 
     return JSON.parse(response.text);
   };
