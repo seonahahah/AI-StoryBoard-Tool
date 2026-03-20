@@ -71,9 +71,9 @@ interface ProjectData {
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-// gemini-3.1-pro-preview 무료 티어 기준 일일 한도는 50회입니다.
-const DEFAULT_FREE_LIMIT = 50;
-const TIER1_LIMIT = 1000; // 유료 계정 Tier 1 권장 일일 한도
+// gemini-3.1-flash 무료 티어 기준 일일 한도는 1500회(RPD)입니다.
+const DEFAULT_FREE_LIMIT = 1500;
+const TIER1_LIMIT = 2000; // 유료 계정 Tier 1 권장 일일 한도 (Flash 모델은 쿼터가 넉넉합니다)
 const STORAGE_KEY = 'gemini_usage';
 const SETTINGS_KEY = 'gemini_settings';
 
@@ -545,7 +545,7 @@ ${scenarioText}
       }
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.1-pro-preview",
+        model: "gemini-3.1-flash",
         contents: [{ role: 'user', parts }],
         config: {
           responseMimeType: "application/json",
@@ -641,7 +641,7 @@ ${shot.referenceImage ? "4. 첨부된 레퍼런스 이미지의 스타일을 반
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: "gemini-3.1-flash",
       contents: [{ role: 'user', parts }],
       config: {
         responseMimeType: "application/json",
@@ -708,8 +708,9 @@ ${shot.referenceImage ? "4. 첨부된 레퍼런스 이미지의 스타일을 반
         if (handleApiError(err)) break; // 할당량 초과면 중단
       }
       if (i < shotList.length - 1) {
-  await new Promise(resolve => setTimeout(resolve, 3000));
-}
+        // Flash 모델은 TPM이 넉넉하므로 딜레이를 줄여도 안전합니다.
+        await new Promise(resolve => setTimeout(resolve, isPaidAccount ? 500 : 2000));
+      }
       setGenerationProgress(Math.round(((i + 1) / shotList.length) * 100));
     }
 
