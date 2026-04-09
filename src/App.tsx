@@ -33,6 +33,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { supabase } from './lib/supabase';
+import { getDeviceId } from './lib/deviceId';
 
 // --- Types ---
 interface Shot {
@@ -315,6 +316,7 @@ export default function App() {
       const { data, error } = await supabase
         .from('storyboard_projects')
         .select('id, title, project_title, updated_at')
+        .eq('device_id', getDeviceId())
         .order('updated_at', { ascending: false })
         .limit(20);
       
@@ -365,6 +367,7 @@ export default function App() {
         storyboard_prompts: storyboardPrompts,
         final_images: compressedFinalImages,
         current_step: currentStep,
+        device_id: getDeviceId(),
         updated_at: new Date().toISOString()
       };
 
@@ -384,6 +387,7 @@ export default function App() {
         const { data } = await supabase
           .from('storyboard_projects')
           .select('id, created_at')
+          .eq('device_id', getDeviceId())
           .order('created_at', { ascending: true });
 
         if (data && data.length > 10) {
